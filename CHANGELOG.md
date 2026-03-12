@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0] - 2026-03-12
+
+### Changed
+- **Plugin registration 改为 native plugin system**：`install.sh` 不再向 `settings.json["hooks"]` 写入硬编码绝对路径，改为写入 `installed_plugins.json` + `settings.json["enabledPlugins"]`，Claude Code 通过 `plugin.json → hooks/hooks.json → ${CLAUDE_PLUGIN_ROOT}` 自动注册 hooks
+- `plugin.json` 新增 `"hooks": "./hooks/hooks.json"` 字段，完成 native plugin 接入
+- `plugin.json` 新增 `"skills": "./skills/"` 字段，支持 Claude Code 自动发现并注册 `skills/` 目录下所有 skill
+- `SKILL.md` 从根目录迁移至 `skills/session-recorder/SKILL.md`，插件现为可扩展的 skills 平台架构
+- `hooks/session-start` 更新读取路径为 `skills/session-recorder/SKILL.md`
+- `hooks/hooks.json` PostToolUse command 改为 `python3 '${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use'`（之前错误地通过 run-hook.cmd 调用 bash，无法执行 Python 脚本）
+- `uninstall.sh` 改为从 `installed_plugins.json` 和 `settings.json["enabledPlugins"]` 移除，同时兼容清理旧版手动 hooks
+- 升级安装时自动迁移：检测并清除旧版在 `settings.json["hooks"]` 中写入的手动条目
+
 ## [1.5.0] - 2026-03-12
 
 ### Added

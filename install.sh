@@ -8,11 +8,11 @@
 #
 #  What it does:
 #    1. Copies plugin files to ~/.claude/plugins/cache/local/session-recorder/
-#    2. Merges SessionStart + PostToolUse hooks into ~/.claude/settings.json
-#    3. Sets correct file permissions
-#    4. Verifies installation
+#    2. Registers plugin in ~/.claude/plugins/installed_plugins.json
+#    3. Enables plugin in ~/.claude/settings.json (enabledPlugins)
+#    4. Migrates away from old manual hooks (if upgrading from <=1.5.0)
 #
-#  Requirements: bash 4+, python3 (for JSON merging)
+#  Requirements: bash 4+, python3
 # ============================================================================
 
 set -euo pipefail
@@ -32,7 +32,8 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; }
 
 # ── Configuration ───────────────────────────────────────────────────────────
 PLUGIN_NAME="session-recorder"
-PLUGIN_VERSION="1.5.0"
+PLUGIN_VERSION="1.6.0"
+PLUGIN_KEY="${PLUGIN_NAME}@local"
 
 # Source: where install.sh lives (the repo/distribution directory)
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,8 +41,9 @@ SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Target: Claude Code plugin cache
 TARGET_DIR="${HOME}/.claude/plugins/cache/local/${PLUGIN_NAME}/${PLUGIN_VERSION}"
 
-# Settings file
+# Settings and registry files
 SETTINGS_FILE="${HOME}/.claude/settings.json"
+INSTALLED_PLUGINS_FILE="${HOME}/.claude/plugins/installed_plugins.json"
 
 # ── Pre-flight checks ──────────────────────────────────────────────────────
 preflight() {
@@ -50,16 +52,16 @@ preflight() {
         warn "Bash 4+ recommended (you have ${BASH_VERSION}). Proceeding anyway..."
     fi
 
-    # Check python3 for JSON merging
+    # Check python3
     if ! command -v python3 &>/dev/null; then
-        error "python3 is required for JSON configuration merging."
+        error "python3 is required."
         error "Install Python 3 and try again."
         exit 1
     fi
 
     # Check source files exist
-    if [[ ! -f "${SOURCE_DIR}/SKILL.md" ]]; then
-        error "SKILL.md not found in ${SOURCE_DIR}"
+    if [[ ! -f "${SOURCE_DIR}/skills/session-recorder/SKILL.md" ]]; then
+        error "skills/session-recorder/SKILL.md not found in ${SOURCE_DIR}"
         error "Run this script from the session-recorder directory."
         exit 1
     fi
@@ -85,12 +87,12 @@ check_installation() {
     if [[ -d "${TARGET_DIR}" ]]; then
         success "Plugin directory exists: ${TARGET_DIR}"
 
-        if [[ -f "${TARGET_DIR}/SKILL.md" ]]; then
+        if [[ -f "${TARGET_DIR}/skills/session-recorder/SKILL.md" ]]; then
             local ver
-            ver=$(grep -o 'version: [0-9.]*' "${TARGET_DIR}/SKILL.md" 2>/dev/null | head -1 | awk '{print $2}')
-            success "SKILL.md found (version: ${ver:-unknown})"
+            ver=$(grep -o 'version: [0-9.]*' "${TARGET_DIR}/skills/session-recorder/SKILL.md" 2>/dev/null | head -1 | awk '{print $2}')
+            success "skills/session-recorder/SKILL.md found (version: ${ver:-unknown})"
         else
-            error "SKILL.md missing"
+            error "skills/session-recorder/SKILL.md missing"
         fi
 
         if [[ -x "${TARGET_DIR}/hooks/session-start" ]]; then
@@ -110,24 +112,34 @@ check_installation() {
 
     echo ""
 
-    # Check settings.json hooks
-    if [[ -f "${SETTINGS_FILE}" ]]; then
-        if grep -q "session-recorder" "${SETTINGS_FILE}" 2>/dev/null; then
-            success "settings.json: session-recorder hooks registered"
-
-            if grep -q "SessionStart" "${SETTINGS_FILE}" 2>/dev/null; then
-                success "  SessionStart hook: configured"
-            else
-                warn "  SessionStart hook: NOT configured"
-            fi
-
-            if grep -q "PostToolUse" "${SETTINGS_FILE}" 2>/dev/null; then
-                success "  PostToolUse hook: configured"
-            else
-                warn "  PostToolUse hook: NOT configured"
-            fi
+    # Check installed_plugins.json
+    if [[ -f "${INSTALLED_PLUGINS_FILE}" ]]; then
+        if python3 -c "
+import json, sys
+with open('${INSTALLED_PLUGINS_FILE}') as f:
+    data = json.load(f)
+sys.exit(0 if '${PLUGIN_KEY}' in data else 1)
+" 2>/dev/null; then
+            success "installed_plugins.json: ${PLUGIN_KEY} registered"
         else
-            error "settings.json: no session-recorder hooks found"
+            error "installed_plugins.json: ${PLUGIN_KEY} NOT registered"
+        fi
+    else
+        error "installed_plugins.json not found at ${INSTALLED_PLUGINS_FILE}"
+    fi
+
+    # Check enabledPlugins in settings.json
+    if [[ -f "${SETTINGS_FILE}" ]]; then
+        if python3 -c "
+import json, sys
+with open('${SETTINGS_FILE}') as f:
+    settings = json.load(f)
+enabled = settings.get('enabledPlugins', {})
+sys.exit(0 if enabled.get('${PLUGIN_KEY}') == True else 1)
+" 2>/dev/null; then
+            success "settings.json: ${PLUGIN_KEY} enabled"
+        else
+            error "settings.json: ${PLUGIN_KEY} NOT in enabledPlugins"
         fi
     else
         error "settings.json not found at ${SETTINGS_FILE}"
@@ -157,9 +169,10 @@ copy_files() {
     mkdir -p "${TARGET_DIR}/.claude-plugin"
     mkdir -p "${TARGET_DIR}/hooks"
     mkdir -p "${TARGET_DIR}/references"
+    mkdir -p "${TARGET_DIR}/skills/session-recorder"
 
     # Copy core files
-    cp "${SOURCE_DIR}/SKILL.md" "${TARGET_DIR}/SKILL.md"
+    cp "${SOURCE_DIR}/skills/session-recorder/SKILL.md" "${TARGET_DIR}/skills/session-recorder/SKILL.md"
     cp "${SOURCE_DIR}/.claude-plugin/plugin.json" "${TARGET_DIR}/.claude-plugin/plugin.json"
 
     # Copy hooks
@@ -181,84 +194,87 @@ copy_files() {
     success "Plugin files copied."
 }
 
-# ── Merge hooks into settings.json ──────────────────────────────────────────
-merge_hooks() {
-    info "Configuring hooks in ${SETTINGS_FILE} ..."
+# ── Register plugin via native plugin system ─────────────────────────────────
+register_plugin() {
+    info "Registering plugin in Claude Code plugin system ..."
 
-    # Build the hook commands using the actual target path
-    local session_start_cmd="bash '${TARGET_DIR}/hooks/session-start'"
-    local post_tool_use_cmd="python3 '${TARGET_DIR}/hooks/post-tool-use'"
-
-    # Use python3 for reliable JSON merging
     python3 << PYEOF
 import json, os, sys
+from datetime import datetime, timezone
 
-settings_path = "${SETTINGS_FILE}"
+plugin_key = "${PLUGIN_KEY}"
 plugin_name = "${PLUGIN_NAME}"
-session_start_cmd = """${session_start_cmd}"""
-post_tool_use_cmd = """${post_tool_use_cmd}"""
+plugin_version = "${PLUGIN_VERSION}"
+install_path = "${TARGET_DIR}"
+settings_path = "${SETTINGS_FILE}"
+installed_plugins_path = "${INSTALLED_PLUGINS_FILE}"
+now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
-# Load or create settings
+# ── Step 1: Register in installed_plugins.json ──
+os.makedirs(os.path.dirname(installed_plugins_path), exist_ok=True)
+
+if os.path.isfile(installed_plugins_path):
+    with open(installed_plugins_path, "r") as f:
+        installed = json.load(f)
+else:
+    installed = {}
+
+# Preserve installedAt if upgrading
+existing = installed.get(plugin_key, [])
+installed_at = existing[0].get("installedAt", now) if existing else now
+
+installed[plugin_key] = [{
+    "scope": "user",
+    "installPath": install_path,
+    "version": plugin_version,
+    "installedAt": installed_at,
+    "lastUpdated": now
+}]
+
+with open(installed_plugins_path, "w") as f:
+    json.dump(installed, f, indent=2, ensure_ascii=False)
+
+print(f"  [OK] Registered {plugin_key} in installed_plugins.json")
+
+# ── Step 2: Update settings.json ──
 if os.path.isfile(settings_path):
     with open(settings_path, "r") as f:
         settings = json.load(f)
 else:
     settings = {}
 
-# Ensure hooks dict exists
-if "hooks" not in settings:
-    settings["hooks"] = {}
+# Migration: remove old manually-written hooks (pre-1.6.0 installs)
+hooks = settings.get("hooks", {})
+migrated = False
+for hook_event in list(hooks.keys()):
+    original_len = len(hooks[hook_event])
+    hooks[hook_event] = [
+        entry for entry in hooks[hook_event]
+        if not any(plugin_name in h.get("command", "")
+                   for h in entry.get("hooks", []))
+    ]
+    if len(hooks[hook_event]) != original_len:
+        migrated = True
+    if not hooks[hook_event]:
+        del hooks[hook_event]
+if not hooks and "hooks" in settings:
+    del settings["hooks"]
+if migrated:
+    print("  [OK] Migrated: removed old manual hooks from settings.json")
 
-hooks = settings["hooks"]
+# Enable plugin
+settings.setdefault("enabledPlugins", {})[plugin_key] = True
 
-# ── Helper: remove old session-recorder entries from a hook list ──
-def remove_old_entries(hook_list):
-    return [entry for entry in hook_list
-            if not any(plugin_name in h.get("command", "")
-                      for h in entry.get("hooks", []))]
-
-# ── SessionStart hook ──
-session_start_entry = {
-    "matcher": "startup|resume|clear|compact",
-    "hooks": [{
-        "type": "command",
-        "command": session_start_cmd
-    }]
-}
-
-if "SessionStart" in hooks:
-    hooks["SessionStart"] = remove_old_entries(hooks["SessionStart"])
-    hooks["SessionStart"].append(session_start_entry)
-else:
-    hooks["SessionStart"] = [session_start_entry]
-
-# ── PostToolUse hook ──
-post_tool_use_entry = {
-    "matcher": ".*",
-    "hooks": [{
-        "type": "command",
-        "command": post_tool_use_cmd,
-        "timeout": 3000
-    }]
-}
-
-if "PostToolUse" in hooks:
-    hooks["PostToolUse"] = remove_old_entries(hooks["PostToolUse"])
-    hooks["PostToolUse"].append(post_tool_use_entry)
-else:
-    hooks["PostToolUse"] = [post_tool_use_entry]
-
-# Write back
 with open(settings_path, "w") as f:
     json.dump(settings, f, indent=2, ensure_ascii=False)
 
-print("OK")
+print(f"  [OK] Enabled {plugin_key} in settings.json enabledPlugins")
 PYEOF
 
     if [[ $? -eq 0 ]]; then
-        success "Hooks configured in settings.json."
+        success "Plugin registered."
     else
-        error "Failed to configure hooks. Please check ${SETTINGS_FILE} manually."
+        error "Failed to register plugin. Check ${INSTALLED_PLUGINS_FILE} and ${SETTINGS_FILE} manually."
         exit 1
     fi
 }
@@ -329,8 +345,8 @@ main() {
     # Step 1: Copy files
     copy_files
 
-    # Step 2: Configure hooks
-    merge_hooks
+    # Step 2: Register plugin (replaces old merge_hooks approach)
+    register_plugin
 
     # Step 3: Create memory directory (for preferences)
     mkdir -p "${HOME}/.claude/memory"
@@ -340,7 +356,8 @@ main() {
     echo -e "${BOLD}=== Installation Complete ===${NC}"
     echo ""
     success "Plugin installed to: ${TARGET_DIR}"
-    success "Hooks configured in: ${SETTINGS_FILE}"
+    success "Plugin registered in: ${INSTALLED_PLUGINS_FILE}"
+    success "Plugin enabled in:    ${SETTINGS_FILE}"
     echo ""
     info "Next steps:"
     echo "  1. Restart Claude Code (or start a new session)"

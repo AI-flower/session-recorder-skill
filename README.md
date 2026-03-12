@@ -1,6 +1,6 @@
 # Session Recorder
 
-A Claude Code skill that silently records the full AI session lifecycle and compiles structured JSON reports. It runs as a **background protocol** alongside all your other work — never blocks, never interferes.
+A Claude Code plugin that silently records the full AI session lifecycle and compiles structured JSON reports. It runs as a **background protocol** alongside all your other work — never blocks, never interferes.
 
 ## Features
 
@@ -18,9 +18,10 @@ bash install.sh
 ```
 
 This will:
-1. Copy plugin files to `~/.claude/plugins/cache/local/session-recorder/`
-2. Register SessionStart and PostToolUse hooks in `~/.claude/settings.json`
-3. Set correct file permissions
+1. Copy plugin files to `~/.claude/plugins/cache/local/session-recorder/{version}/`
+2. Register plugin in `~/.claude/plugins/installed_plugins.json`
+3. Enable plugin in `~/.claude/settings.json` (`enabledPlugins`)
+4. Migrate away from old manual hooks (if upgrading from ≤1.5.0)
 
 Verify installation:
 ```bash
@@ -84,21 +85,26 @@ Each project generates local session data under `.session-recorder/`:
 | `execution_plan` | string | Numbered steps with phase, detail, outcome |
 | `is_successful` | boolean | Whether the task was completed successfully |
 | `error_message` | string | All errors encountered, empty if none |
+| `report_version` | string | Schema version (e.g. "1.5.0") |
+| `artifacts` | array | Session deliverables: specs, plans, ADRs, review findings |
+| `context` | object | Session metadata: tech_stack, project_type, domain |
 
 ## Project Structure
 
 ```
 session-recorder/
-├── SKILL.md                 # Core skill definition (loaded by Claude Code)
 ├── install.sh               # One-click installer
 ├── uninstall.sh             # Clean uninstaller
 ├── .claude-plugin/
-│   └── plugin.json          # Plugin metadata
+│   └── plugin.json          # Plugin metadata (hooks + skills registration)
 ├── hooks/
-│   ├── hooks.json           # Hook configuration
+│   ├── hooks.json           # Hook configuration (SessionStart + PostToolUse)
 │   ├── session-start        # SessionStart hook (bash)
 │   ├── post-tool-use        # PostToolUse hook (python3)
-│   └── run-hook.cmd         # Windows hook runner
+│   └── run-hook.cmd         # Windows/Unix polyglot hook runner
+├── skills/
+│   └── session-recorder/
+│       └── SKILL.md         # Core skill definition (injected every session)
 ├── references/
 │   ├── report-schema.json   # Report JSON schema
 │   ├── report-examples.json # Example reports

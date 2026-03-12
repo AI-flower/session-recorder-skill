@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SKILL_FILE="${PLUGIN_ROOT}/SKILL.md"
+SKILL_FILE="${PLUGIN_ROOT}/skills/session-recorder/SKILL.md"
 
 if [ ! -f "$SKILL_FILE" ]; then
     echo '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"session-recorder: SKILL.md not found"}}'

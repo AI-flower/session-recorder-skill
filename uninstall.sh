@@ -8,8 +8,10 @@
 #
 #  What it does:
 #    1. Removes plugin files from ~/.claude/plugins/cache/local/session-recorder/
-#    2. Removes session-recorder hooks from ~/.claude/settings.json
-#    3. Optionally removes user preferences
+#    2. Removes entry from ~/.claude/plugins/installed_plugins.json
+#    3. Removes entry from ~/.claude/settings.json enabledPlugins
+#    4. Cleans up any legacy manual hooks (from pre-1.6.0 installs)
+#    5. Optionally removes user preferences
 #
 #  Requirements: python3 (for JSON editing)
 # ============================================================================
@@ -31,8 +33,10 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; }
 
 # ── Configuration ───────────────────────────────────────────────────────────
 PLUGIN_NAME="session-recorder"
+PLUGIN_KEY="${PLUGIN_NAME}@local"
 PLUGIN_DIR="${HOME}/.claude/plugins/cache/local/${PLUGIN_NAME}"
 SETTINGS_FILE="${HOME}/.claude/settings.json"
+INSTALLED_PLUGINS_FILE="${HOME}/.claude/plugins/installed_plugins.json"
 PREFS_FILE="${HOME}/.claude/memory/session-recorder-preferences.json"
 FORCE=false
 
@@ -67,71 +71,84 @@ remove_plugin_files() {
     fi
 }
 
-# ── Remove hooks from settings.json ────────────────────────────────────────
-remove_hooks() {
-    if [[ ! -f "${SETTINGS_FILE}" ]]; then
-        info "No settings.json found."
-        return
-    fi
-
-    if ! grep -q "${PLUGIN_NAME}" "${SETTINGS_FILE}" 2>/dev/null; then
-        info "No session-recorder hooks in settings.json."
-        return
-    fi
-
-    info "Found session-recorder hooks in settings.json."
-
-    if ! confirm "  Remove hooks from settings.json?"; then
-        info "Skipped hook removal."
-        return
-    fi
-
+# ── Deregister plugin from Claude Code plugin system ──────────────────────
+deregister_plugin() {
     if ! command -v python3 &>/dev/null; then
-        error "python3 required for safe JSON editing. Please remove hooks manually."
+        error "python3 required for safe JSON editing. Please deregister plugin manually."
         return
     fi
 
-    python3 << 'PYEOF'
+    info "Deregistering plugin from Claude Code plugin system ..."
+
+    python3 << PYEOF
 import json, os
 
-settings_path = os.path.expanduser("~/.claude/settings.json")
-plugin_name = "session-recorder"
+plugin_key = "${PLUGIN_KEY}"
+plugin_name = "${PLUGIN_NAME}"
+settings_path = "${SETTINGS_FILE}"
+installed_plugins_path = "${INSTALLED_PLUGINS_FILE}"
 
-with open(settings_path, "r") as f:
-    settings = json.load(f)
-
-hooks = settings.get("hooks", {})
-changed = False
-
-for hook_type in list(hooks.keys()):
-    original_len = len(hooks[hook_type])
-    hooks[hook_type] = [
-        entry for entry in hooks[hook_type]
-        if not any(plugin_name in h.get("command", "")
-                   for h in entry.get("hooks", []))
-    ]
-    if len(hooks[hook_type]) != original_len:
-        changed = True
-    # Remove empty hook arrays
-    if not hooks[hook_type]:
-        del hooks[hook_type]
-
-# Remove empty hooks dict
-if not hooks and "hooks" in settings:
-    del settings["hooks"]
-
-if changed:
-    with open(settings_path, "w") as f:
-        json.dump(settings, f, indent=2, ensure_ascii=False)
-    print("OK")
+# ── Step 1: Remove from installed_plugins.json ──
+if os.path.isfile(installed_plugins_path):
+    with open(installed_plugins_path, "r") as f:
+        installed = json.load(f)
+    if plugin_key in installed:
+        del installed[plugin_key]
+        with open(installed_plugins_path, "w") as f:
+            json.dump(installed, f, indent=2, ensure_ascii=False)
+        print(f"  [OK] Removed {plugin_key} from installed_plugins.json")
+    else:
+        print(f"  [--] {plugin_key} not found in installed_plugins.json (already removed)")
 else:
-    print("NO_CHANGE")
+    print("  [--] installed_plugins.json not found")
+
+# ── Step 2: Update settings.json ──
+if not os.path.isfile(settings_path):
+    print("  [--] settings.json not found")
+else:
+    with open(settings_path, "r") as f:
+        settings = json.load(f)
+
+    changed = False
+
+    # Remove from enabledPlugins
+    enabled = settings.get("enabledPlugins", {})
+    if plugin_key in enabled:
+        del enabled[plugin_key]
+        changed = True
+        print(f"  [OK] Removed {plugin_key} from enabledPlugins")
+    else:
+        print(f"  [--] {plugin_key} not in enabledPlugins")
+
+    # Legacy cleanup: remove old manually-written hooks (pre-1.6.0)
+    hooks = settings.get("hooks", {})
+    for hook_event in list(hooks.keys()):
+        original_len = len(hooks[hook_event])
+        hooks[hook_event] = [
+            entry for entry in hooks[hook_event]
+            if not any(plugin_name in h.get("command", "")
+                       for h in entry.get("hooks", []))
+        ]
+        if len(hooks[hook_event]) != original_len:
+            changed = True
+            print(f"  [OK] Removed legacy {hook_event} hook from settings.json")
+        if not hooks[hook_event]:
+            del hooks[hook_event]
+    if not hooks and "hooks" in settings:
+        del settings["hooks"]
+
+    if changed:
+        with open(settings_path, "w") as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+        print("  [OK] settings.json updated")
+    else:
+        print("  [--] No changes needed in settings.json")
 PYEOF
 
     if [[ $? -eq 0 ]]; then
-        success "Hooks removed from settings.json."
+        success "Plugin deregistered."
     else
-        error "Failed to edit settings.json. Please remove hooks manually."
+        error "Failed to deregister plugin. Please edit ${SETTINGS_FILE} and ${INSTALLED_PLUGINS_FILE} manually."
     fi
 }
 
@@ -169,8 +186,8 @@ main() {
     # Step 1: Remove plugin files
     remove_plugin_files
 
-    # Step 2: Remove hooks
-    remove_hooks
+    # Step 2: Deregister plugin
+    deregister_plugin
 
     # Step 3: Remove preferences (optional)
     echo ""

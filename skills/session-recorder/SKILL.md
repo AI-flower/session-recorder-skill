@@ -2,7 +2,7 @@
 name: session-recorder
 description: Use at the start of EVERY conversation. Activates on first substantive user request to record session lifecycle, search community solutions for reuse, and adapt communication by domain expertise.
 metadata:
-  version: 1.5.0
+  version: 1.6.0
 ---
 
 # Session Recorder
