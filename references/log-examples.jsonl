@@ -1,0 +1,55 @@
+# Session Recorder — Log Examples
+# This file is referenced from SKILL.md. AI reads it on-demand when needed for log format guidance.
+
+## Rich Logging Examples (GOOD)
+
+### State Change + Goal Extraction
+{"turn":1,"type":"state_change","from":"IDLE","to":"ACTIVE","content":"用户要求实现一个掌握国际形势的网站，涵盖新闻聚合、数据可视化和AI分析功能","ts":"2026-03-10T17:30:00Z"}
+{"turn":1,"type":"goal_extracted","content":"实现一个掌握国际形势的综合信息网站，包含新闻聚合、数据可视化和AI分析三大模块","ts":"2026-03-10T17:30:01Z"}
+
+### Skill Invocation
+{"turn":1,"type":"skill_invoked","skill":"superpowers:brainstorming","description":"启动头脑风暴skill，通过逐步提问理清网站需求、目标用户、技术选型和架构设计","ts":"2026-03-10T17:30:02Z"}
+
+### User Interaction (MUST include question + options + answer)
+{"turn":2,"type":"user_interaction","action":"answer","content":"AI提问：'你说的掌握国际形势，具体是指哪种类型的网站？'，给出4个选项：(1)新闻聚合型-自动抓取整合各大新闻源的国际新闻 (2)数据可视化型-用地图图表展示国际局势如地缘政治、经济数据、冲突热点 (3)AI分析型-结合AI对国际事件进行深度分析和趋势预测 (4)综合信息平台-以上几种的组合。用户回答：'以上几种都需要'，选择方案4综合信息平台","ts":"2026-03-10T17:31:00Z"}
+
+### Decision (MUST include what + alternatives + why)
+{"turn":2,"type":"decision","content":"项目涉及3个独立子系统（新闻聚合、数据可视化、AI分析），范围过大。决定分3个Phase交付：Phase1新闻聚合（基础骨架+内容抓取展示）、Phase2数据可视化（地图+图表展示国际数据）、Phase3 AI分析（事件分析+趋势预测）。先完成Phase1的brainstorming和设计","reason":"每个Phase可独立测试和交付，符合工程最佳实践，避免一次性实现导致复杂度失控"}
+
+### Error (MUST include full message + context + impact)
+{"turn":4,"type":"error","content":"Bash执行brainstorm-server/start-server.sh失败，exit code 1，错误信息：'Server failed to start within 5 seconds'。CLAUDE_PLUGIN_ROOT环境变量为空导致首次路径错误(exit 127)，修正为绝对路径后仍然失败(exit 1)","context":"尝试启动Visual Companion服务器","source":"tool_failure","ts":"2026-03-10T17:33:30Z"}
+
+### Solution Community Search
+{"turn":1,"type":"decision","content":"方案社区搜索：query='实现一个掌握国际形势的网站'，返回3个结果。最高匹配度68.8%（Build a REST API...）。呈现给用户选择","reason":"IDLE→ACTIVE后的标准流程：先搜索历史方案再决定工作路径"}
+{"turn":1,"type":"user_interaction","action":"solution_choice","content":"AI展示3个历史方案：(1)REST API with JWT-匹配度68.8% (2)PostgreSQL migration-匹配度52.1% (3)WebSocket chat-匹配度41.3%。用户选择：不使用历史方案，从零开始。原因：现有方案与需求差异较大"}
+
+### Auto-Execute Mode Change
+{"turn":5,"type":"decision","content":"用户说'放开权限，你直接执行就好'。启用自动执行模式：后续所有决策点AI将自动选择推荐方案，不再逐一询问用户","reason":"用户明确要求减少交互，提高效率。偏好已保存到全局记忆，后续新会话也将生效"}
+
+### Execution Step (with skills_used and key_decisions)
+{"turn":3,"type":"execution_step","phase":"requirement analysis","detail":"通过brainstorming skill与用户逐步确认需求：目标用户为中小企业，核心功能包括用户管理、订单处理、数据看板三个模块。技术选型确认为Next.js + PostgreSQL + Prisma","skills_used":["superpowers:brainstorming"],"key_decisions":["选择Next.js而非Nuxt.js，因为团队更熟悉React生态","PostgreSQL优先于MySQL，支持JSON查询和全文搜索"],"outcome":"确认3个核心模块和技术栈","errors":[],"ts":"2026-03-10T17:35:00Z"}
+{"turn":6,"type":"execution_step","phase":"implementation: auth module","detail":"实现JWT认证中间件，包含access token（15min）和refresh token（7d）双token机制。创建了auth middleware、login/register handler和token刷新接口","skills_used":[],"key_decisions":["JWT secret从环境变量读取，不硬编码","refresh token存储在httpOnly cookie中"],"outcome":"认证模块完成，3个接口通过手动测试","errors":["[Turn 5] runtime_error: bcrypt hash比对失败，原因是salt rounds配置错误"],"ts":"2026-03-10T17:45:00Z"}
+
+### Solution Adaptation Analysis
+{"turn":2,"type":"execution_step","phase":"solution replay: adaptation analysis","detail":"对比原方案（Go+Gin+JWT REST API，4步）与当前任务（Python+FastAPI+OAuth2）。逐步分类：Step1需求分析→可复用（通用流程），Step2架构设计→需调整（Go→Python, Gin→FastAPI, JWT→OAuth2），Step3实现→需调整（代码完全不同但结构可参考），Step4测试→需调整（Go test→pytest）。无缺失步骤","skills_used":[],"key_decisions":["保留原方案4阶段结构","JWT中间件替换为OAuth2授权码+PKCE流程","Gin路由模式替换为FastAPI依赖注入"],"outcome":"适配计划：4步，1个可复用+3个需调整+0个跳过+0个新增","errors":[],"ts":"2026-03-10T17:32:00Z"}
+
+### Domain Detection
+{"turn":2,"type":"decision","content":"检测到用户在'法律'领域为beginner（用语：'合同违约了咋办'，无专业术语）。启用白话沟通模式，AI将主动承担法律决策并用生活化语言解释","reason":"用户表达方式显示不具备法律专业知识，需要降低沟通门槛"}
+
+## BAD vs GOOD Comparison
+
+### user_interaction
+BAD:  "用户选择综合信息平台"
+GOOD: (see full example above — includes question, all options, user's exact words, final choice)
+
+### decision
+BAD:  "决定分阶段实施"
+GOOD: (see full example above — includes what, alternatives, why)
+
+### tool_call
+BAD:  "读取了文件"
+GOOD: "Read CLAUDE.md - 项目配置文件，包含技术栈偏好：Node.js + React"
+
+### error
+BAD:  "服务器启动失败"
+GOOD: (see full example above — includes full message, context, impact)

@@ -1,0 +1,80 @@
+{
+  "description": "Session Recorder report examples. Referenced from SKILL.md during final report compilation.",
+  "examples": [
+    {
+      "label": "Successful task with skill install metadata",
+      "report": {
+        "task_description": "Build a REST API with JWT authentication using Go and Gin framework",
+        "skills": [
+          {
+            "name": "superpowers:brainstorming",
+            "description": "Help turn ideas into fully formed designs through collaborative dialogue",
+            "content": "# Brainstorming Ideas Into Designs\n\nHelp turn ideas into fully formed designs...\n\n## Checklist\n1. Explore project context\n2. Ask clarifying questions\n...",
+            "install_command": null,
+            "source": "superpowers plugin"
+          },
+          {
+            "name": "superpowers:writing-plans",
+            "description": "Write comprehensive implementation plans",
+            "content": "# Writing Plans\n\n## Overview\nWrite comprehensive implementation plans...\n",
+            "install_command": null,
+            "source": "superpowers plugin"
+          },
+          {
+            "name": "find-skills",
+            "description": "Search and discover community skills",
+            "content": "# Find Skills\n\n...",
+            "install_command": "npx skills add vercel-labs/skills@find-skills -g -y",
+            "source": "vercel-labs/skills"
+          }
+        ],
+        "execution_plan": "1. 需求分析：通过brainstorming确认API范围(用户注册/登录/Profile CRUD)，选定Go+Gin+PostgreSQL — skills: brainstorming | decisions: Gin优于Echo(中间件支持), PostgreSQL优于SQLite(生产就绪) | outcome: 确认4个核心端点\n2. 架构设计：设计REST API架构，JWT auth中间件(access/refresh token模式)，编写TDD实现计划 — skills: writing-plans | decisions: access token 15min + refresh token 7d | outcome: 7步实现计划\n3. 实现：实现routes/handlers/JWT生成验证/auth中间件/user model/数据库迁移 — decisions: JWT secret从环境变量读取 | outcome: 全部路由实现 | errors: [Turn 3] tool_failure: Write权限被拒\n4. 测试：编写auth中间件和handler单元测试，修复2个token过期边界case — outcome: 12个测试全部通过 | errors: [Turn 5] runtime_error: npm test 2个失败, [Turn 6] user_correction: JWT secret应用环境变量",
+        "is_successful": true,
+        "error_message": "[Turn 3] tool_failure: Write tool failed for .session-recorder/session-log.jsonl - Permission denied\n[Turn 5] runtime_error: npm test failed with 2 errors\n[Turn 6] user_correction: User said JWT secret should use env variable, not hardcoded"
+      }
+    },
+    {
+      "label": "Failed/abandoned task",
+      "report": {
+        "task_description": "Implement real-time WebSocket chat with room support",
+        "skills": [
+          {
+            "name": "superpowers:brainstorming",
+            "description": "Help turn ideas into fully formed designs",
+            "content": "# Brainstorming Ideas Into Designs\n\n...",
+            "install_command": null,
+            "source": null
+          }
+        ],
+        "execution_plan": "1. Set up WebSocket server\n2. Implement connection management\n3. Build room join/leave",
+        "is_successful": false,
+        "error_message": "[Turn 2] user_reported: User said the proposed architecture is wrong, should not use WebSocket\n[Turn 3] user_reported: User cancelled the task"
+      }
+    },
+    {
+      "label": "Solution replay with adaptation analysis",
+      "report": {
+        "task_description": "Build a REST API with OAuth2 authentication using Python and FastAPI",
+        "skills": [
+          {
+            "name": "superpowers:brainstorming",
+            "description": "Help turn ideas into fully formed designs",
+            "content": "# Brainstorming Ideas Into Designs\n\n...",
+            "install_command": null,
+            "source": "superpowers plugin"
+          },
+          {
+            "name": "superpowers:writing-plans",
+            "description": "Write comprehensive implementation plans",
+            "content": "# Writing Plans\n\n...",
+            "install_command": null,
+            "source": "superpowers plugin"
+          }
+        ],
+        "execution_plan": "1. Solution replay: 依赖检查 — 复用社区方案(ID: sol_abc123, 匹配度72.5%, 原始: Go+Gin+JWT)，2个内建skill无需安装 | outcome: 依赖验证通过\n2. Solution replay: 适配分析 — 对比原方案(Go+Gin+JWT 4步) vs 当前(Python+FastAPI+OAuth2)。Step1可复用, Step2-4需适配(Go→Python, Gin→FastAPI, JWT→OAuth2) | decisions: 保留4阶段结构, JWT中间件改OAuth2 flow | outcome: 适配计划1复用+3适配\n3. Solution replay: 需求分析 — 复用原step1，brainstorming确认5个端点+OAuth2 provider(Google+GitHub) — skills: brainstorming | decisions: PostgreSQL+SQLAlchemy async ORM\n4. Solution replay: 架构设计 — 适配原step2，OAuth2 authorization code+PKCE flow，FastAPI Depends()替代Gin中间件 — skills: writing-plans | decisions: Authlib库, FastAPI Depends() | outcome: 6步实现计划\n5. Solution replay: 实现 — 适配原step3，FastAPI routes+OAuth2 callback handlers+token存储 — decisions: httpOnly cookies存token | outcome: 全部路由实现\n6. Solution replay: 测试 — 适配原step4，pytest+httpx替代Go test，添加OAuth2 mock fixtures — decisions: pytest-asyncio, respx mock | outcome: 15个测试全部通过",
+        "is_successful": true,
+        "error_message": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Session Recorder Report",
+  "description": "JSON Schema for validating session-recorder final reports.",
+  "type": "object",
+  "required": [
+    "task_description",
+    "skills",
+    "execution_plan",
+    "is_successful",
+    "error_message"
+  ],
+  "properties": {
+    "task_description": {
+      "type": "string",
+      "description": "One-sentence description of the user's task/goal."
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "content"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Skill name as invoked."
+          },
+          "description": {
+            "type": "string",
+            "description": "Brief description of what the skill does."
+          },
+          "content": {
+            "type": "string",
+            "description": "Full content of the skill (SKILL.md body or equivalent). Use escaped newlines for multi-line content."
+          },
+          "install_command": {
+            "type": ["string", "null"],
+            "description": "Command to install this skill (e.g. 'npx skills add vercel-labs/skills@find-skills -g -y'). null if built-in or no install needed.",
+            "default": null
+          },
+          "source": {
+            "type": ["string", "null"],
+            "description": "Where this skill comes from (e.g. 'superpowers plugin', 'vercel-labs/skills', 'local ~/.agents/skills/'). null if unknown.",
+            "default": null
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "List of skills used during the session, including their full content and installation metadata."
+    },
+    "execution_plan": {
+      "type": "string",
+      "description": "Numbered step-by-step execution plan as a single string. Each step on its own line, separated by \\n. Format: '1. Phase: Detail — key decisions, outcome\\n2. Phase: Detail...'. Include skills used, key decisions, and errors per step inline."
+    },
+    "is_successful": {
+      "type": "boolean",
+      "description": "Whether the task was completed successfully. true = resolved, false = abandoned/failed/unresolved."
+    },
+    "error_message": {
+      "type": "string",
+      "description": "ALL errors encountered during the session concatenated with newlines. Includes: tool failures, user-reported issues, user corrections, runtime errors, AI mistakes. Format: '[Turn N] source: description'. Set to empty string only if zero errors occurred. Populated regardless of is_successful value."
+    }
+  },
+  "additionalProperties": false
+}

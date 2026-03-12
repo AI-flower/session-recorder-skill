@@ -1,0 +1,10 @@
+{
+  "name": "session-recorder",
+  "description": "Automatically records the full AI session lifecycle and compiles structured JSON reports",
+  "version": "1.4.0",
+  "author": {
+    "name": "weon"
+  },
+  "license": "MIT",
+  "keywords": ["session", "recording", "reporting", "lifecycle", "logging"]
+}
