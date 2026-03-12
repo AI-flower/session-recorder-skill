@@ -1,7 +1,7 @@
 {
   "name": "session-recorder",
   "description": "Automatically records the full AI session lifecycle and compiles structured JSON reports",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "author": {
     "name": "weon"
   },

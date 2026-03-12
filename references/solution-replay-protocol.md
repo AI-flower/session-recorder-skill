@@ -4,14 +4,32 @@ Referenced from SKILL.md when user selects a community solution. Read this file 
 
 ## Overview
 
-When user selects a community solution, execute 4-stage guided replay:
+When user selects a community solution, execute 5-stage guided replay:
 
 ```
+Stage 0.5  Artifact Loading — load specs, ADRs, review findings as context
 Stage 1    Dependency Installation — ensure all skills available
 Stage 1.5  Adaptation Analysis — proactive gap analysis and plan adaptation
 Stage 2    Guided Replay — execute adapted plan step by step
 Stage 3    Deviation Handling — handle runtime divergence
 ```
+
+## Stage 0.5: Artifact Loading
+
+**Skip if** `solution.artifacts` is absent or empty (backward compat with pre-1.5.0 reports).
+
+Load artifacts by priority, building context for subsequent stages:
+
+| Artifact Type | How Consuming AI Uses It |
+|---------------|------------------------|
+| `design_spec` (P0) | **Primary adaptation reference.** Load as the spec to adapt — skip brainstorming, directly modify sections for current task. |
+| `adr` (P0) | **Pre-validated decisions.** Present as "community-proven choices" during replay. Accept or explicitly override with reasoning. |
+| `review_findings` (P1) | **Known pitfalls checklist.** Cross-check during implementation to proactively avoid same bugs. |
+| `implementation_plan` (P1) | **Code reference.** Use structure/patterns as template, adapt for tech stack differences. |
+| `technical_comparison` (P2) | **Decision context.** Understand why certain tech was chosen — helps when adapting to different stack. |
+| `requirement_qa` (P2) | **Scope hints.** Know what questions to ask current user to clarify scope quickly. |
+
+Log `execution_step` with `phase="solution replay: artifact loading"`.
 
 ## Stage 1: Dependency Installation
 
@@ -68,6 +86,21 @@ Present installation summary:
 
 **ALL steps `not_applicable`:** Warn user, suggest declining and starting from scratch.
 
+### Artifact-Aware Adaptation (when artifacts present)
+
+When `design_spec` artifact exists:
+- Adaptation analysis operates at **spec section level**, not just execution step level.
+- Compare spec sections (requirements, architecture, data model, API, UI) against current task.
+- Classify each section: `reusable` / `adaptable` / `not_applicable`.
+- Output: section-level adaptation plan alongside step-level plan.
+
+When `adr` artifact exists:
+- Present each ADR as: "社区方案选择了 X 而非 Y，原因是 Z。当前任务是否沿用？"
+- User/AI confirms or overrides each decision.
+
+When `review_findings` artifact exists:
+- Integrate into adapted plan: "第 N 步实现时，注意社区方案发现的已知问题：{finding}，已知解决方案：{resolution}"
+
 ## Stage 2: Guided Replay
 
 Walk through the **adapted execution plan** (from Stage 1.5) step by step:
@@ -84,6 +117,12 @@ For each step in adapted_plan:
 
 - **Array format execution_plan**: Full metadata for analysis and replay.
 - **String format execution_plan**: Parse numbered lines, Stage 1.5 with limited metadata (AI infers from text).
+
+### Replay with Artifacts
+
+- **With spec**: Write adapted spec first (fast, since reference exists), then implement. Replaces brainstorming phase.
+- **With ADRs**: Each architectural decision point during replay is pre-answered. Log decisions noting "adopted from community ADR" or "overridden: {reason}".
+- **With review findings**: After each implementation step, cross-check against known issues list. Proactively apply fixes.
 
 ## Stage 3: Deviation Handling
 

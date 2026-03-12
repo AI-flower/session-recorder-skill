@@ -4,6 +4,7 @@
     {
       "label": "Successful task with skill install metadata",
       "report": {
+        "report_version": "1.5.0",
         "task_description": "Build a REST API with JWT authentication using Go and Gin framework",
         "skills": [
           {
@@ -30,12 +31,27 @@
         ],
         "execution_plan": "1. 需求分析：通过brainstorming确认API范围(用户注册/登录/Profile CRUD)，选定Go+Gin+PostgreSQL — skills: brainstorming | decisions: Gin优于Echo(中间件支持), PostgreSQL优于SQLite(生产就绪) | outcome: 确认4个核心端点\n2. 架构设计：设计REST API架构，JWT auth中间件(access/refresh token模式)，编写TDD实现计划 — skills: writing-plans | decisions: access token 15min + refresh token 7d | outcome: 7步实现计划\n3. 实现：实现routes/handlers/JWT生成验证/auth中间件/user model/数据库迁移 — decisions: JWT secret从环境变量读取 | outcome: 全部路由实现 | errors: [Turn 3] tool_failure: Write权限被拒\n4. 测试：编写auth中间件和handler单元测试，修复2个token过期边界case — outcome: 12个测试全部通过 | errors: [Turn 5] runtime_error: npm test 2个失败, [Turn 6] user_correction: JWT secret应用环境变量",
         "is_successful": true,
-        "error_message": "[Turn 3] tool_failure: Write tool failed for .session-recorder/session-log.jsonl - Permission denied\n[Turn 5] runtime_error: npm test failed with 2 errors\n[Turn 6] user_correction: User said JWT secret should use env variable, not hardcoded"
+        "error_message": "[Turn 3] tool_failure: Write tool failed for .session-recorder/session-log.jsonl - Permission denied\n[Turn 5] runtime_error: npm test failed with 2 errors\n[Turn 6] user_correction: User said JWT secret should use env variable, not hardcoded",
+        "artifacts": [
+          {
+            "type": "adr",
+            "title": "技术选型与架构决策",
+            "content": "# Architecture Decision Records\n\n## ADR-1: Web Framework — Gin\n- **Chosen**: Gin\n- **Alternatives**: Echo (lighter but weaker middleware), Fiber (not mature enough)\n- **Reason**: 成熟的中间件生态，团队熟悉\n\n## ADR-2: Database — PostgreSQL\n- **Chosen**: PostgreSQL\n- **Alternatives**: SQLite (不适合生产), MySQL (JSON支持弱)\n- **Reason**: 生产就绪，JSON查询和全文搜索支持\n\n## ADR-3: Token Strategy — Dual Token\n- **Chosen**: Access 15min + Refresh 7d\n- **Alternatives**: 单token长期有效 (安全风险)\n- **Reason**: 平衡安全性与用户体验",
+            "priority": "P0",
+            "source": { "origin": "compiled", "file_path": null, "skill": null }
+          }
+        ],
+        "context": {
+          "tech_stack": ["Go", "Gin", "PostgreSQL", "JWT"],
+          "project_type": "rest_api",
+          "domain": "authentication"
+        }
       }
     },
     {
       "label": "Failed/abandoned task",
       "report": {
+        "report_version": "1.5.0",
         "task_description": "Implement real-time WebSocket chat with room support",
         "skills": [
           {
@@ -48,12 +64,19 @@
         ],
         "execution_plan": "1. Set up WebSocket server\n2. Implement connection management\n3. Build room join/leave",
         "is_successful": false,
-        "error_message": "[Turn 2] user_reported: User said the proposed architecture is wrong, should not use WebSocket\n[Turn 3] user_reported: User cancelled the task"
+        "error_message": "[Turn 2] user_reported: User said the proposed architecture is wrong, should not use WebSocket\n[Turn 3] user_reported: User cancelled the task",
+        "artifacts": [],
+        "context": {
+          "tech_stack": ["WebSocket"],
+          "project_type": "real_time_app",
+          "domain": "messaging"
+        }
       }
     },
     {
       "label": "Solution replay with adaptation analysis",
       "report": {
+        "report_version": "1.5.0",
         "task_description": "Build a REST API with OAuth2 authentication using Python and FastAPI",
         "skills": [
           {
@@ -73,7 +96,88 @@
         ],
         "execution_plan": "1. Solution replay: 依赖检查 — 复用社区方案(ID: sol_abc123, 匹配度72.5%, 原始: Go+Gin+JWT)，2个内建skill无需安装 | outcome: 依赖验证通过\n2. Solution replay: 适配分析 — 对比原方案(Go+Gin+JWT 4步) vs 当前(Python+FastAPI+OAuth2)。Step1可复用, Step2-4需适配(Go→Python, Gin→FastAPI, JWT→OAuth2) | decisions: 保留4阶段结构, JWT中间件改OAuth2 flow | outcome: 适配计划1复用+3适配\n3. Solution replay: 需求分析 — 复用原step1，brainstorming确认5个端点+OAuth2 provider(Google+GitHub) — skills: brainstorming | decisions: PostgreSQL+SQLAlchemy async ORM\n4. Solution replay: 架构设计 — 适配原step2，OAuth2 authorization code+PKCE flow，FastAPI Depends()替代Gin中间件 — skills: writing-plans | decisions: Authlib库, FastAPI Depends() | outcome: 6步实现计划\n5. Solution replay: 实现 — 适配原step3，FastAPI routes+OAuth2 callback handlers+token存储 — decisions: httpOnly cookies存token | outcome: 全部路由实现\n6. Solution replay: 测试 — 适配原step4，pytest+httpx替代Go test，添加OAuth2 mock fixtures — decisions: pytest-asyncio, respx mock | outcome: 15个测试全部通过",
         "is_successful": true,
-        "error_message": ""
+        "error_message": "",
+        "artifacts": [],
+        "context": {
+          "tech_stack": ["Python", "FastAPI", "OAuth2", "PostgreSQL", "SQLAlchemy"],
+          "project_type": "rest_api",
+          "domain": "authentication"
+        }
+      }
+    },
+    {
+      "label": "Full artifacts example (design_spec + adr + review_findings)",
+      "report": {
+        "report_version": "1.5.0",
+        "task_description": "Build a workflow engine with visual editor for automating business processes",
+        "skills": [
+          {
+            "name": "superpowers:brainstorming",
+            "description": "Help turn ideas into fully formed designs",
+            "content": "# Brainstorming Ideas Into Designs\n\n...",
+            "install_command": null,
+            "source": "superpowers plugin"
+          },
+          {
+            "name": "superpowers:writing-plans",
+            "description": "Write comprehensive implementation plans",
+            "content": "# Writing Plans\n\n...",
+            "install_command": null,
+            "source": "superpowers plugin"
+          },
+          {
+            "name": "superpowers:requesting-code-review",
+            "description": "Request code review to verify work meets requirements",
+            "content": "# Requesting Code Review\n\n...",
+            "install_command": null,
+            "source": "superpowers plugin"
+          }
+        ],
+        "execution_plan": "1. 需求分析：brainstorming确认工作流引擎核心功能(节点编排、条件分支、并行执行、错误重试) — skills: brainstorming | decisions: 支持DAG拓扑, 不支持循环 | outcome: 确认5类节点类型\n2. 架构设计：设计引擎核心(DAG调度器+节点执行器+状态机)，编写实现计划 — skills: writing-plans | decisions: Temporal替代自研调度, React Flow做可视化编辑器 | outcome: 12步实现计划\n3. 实现Phase1：工作流定义DSL + DAG验证 + Temporal workflow — outcome: DSL解析器和DAG验证通过\n4. 实现Phase2：React Flow可视化编辑器 + 节点属性面板 — outcome: 可视化编辑器可拖拽创建工作流 | errors: [Turn 8] runtime_error: React Flow节点连线方向错误\n5. Code Review：评审架构和代码质量 — skills: requesting-code-review | outcome: 发现3个问题并修复",
+        "is_successful": true,
+        "error_message": "[Turn 8] runtime_error: React Flow edge direction reversed - source/target swapped",
+        "artifacts": [
+          {
+            "type": "design_spec",
+            "title": "工作流引擎设计文档",
+            "content": "# Workflow Engine Design Spec\n\n## 1. Overview\n自动化业务流程的工作流引擎，支持可视化编辑和DAG调度执行。\n\n## 2. Core Requirements\n- 节点类型：Action / Condition / Parallel / Wait / Webhook\n- DAG拓扑验证（无环检测）\n- 节点执行重试策略（exponential backoff）\n- 工作流版本管理\n\n## 3. Architecture\n- **Engine Layer**: Temporal workflow orchestration\n- **DSL Layer**: JSON-based workflow definition\n- **Editor Layer**: React Flow visual editor\n- **API Layer**: FastAPI REST endpoints\n\n## 4. Data Model\n- Workflow: id, name, version, dsl_json, status\n- WorkflowRun: id, workflow_id, input, state, started_at, finished_at\n- NodeExecution: id, run_id, node_id, status, output, error\n\n## 5. API Endpoints\n- POST /workflows — create workflow\n- GET /workflows/:id — get workflow\n- POST /workflows/:id/run — execute workflow\n- GET /runs/:id — get execution status",
+            "priority": "P0",
+            "source": { "origin": "file", "file_path": "specs/workflow-engine-spec.md", "skill": "superpowers:brainstorming" }
+          },
+          {
+            "type": "adr",
+            "title": "架构决策记录",
+            "content": "# Architecture Decision Records\n\n## ADR-1: Workflow Orchestration — Temporal\n- **Chosen**: Temporal\n- **Alternatives**: 自研调度器 (开发成本高, 可靠性风险), Airflow (偏数据管道, 不适合通用业务流程)\n- **Reason**: 生产级可靠性, 内建重试/超时/版本管理, Python SDK成熟\n\n## ADR-2: Visual Editor — React Flow\n- **Chosen**: React Flow\n- **Alternatives**: JointJS (商业license), D3.js (需大量自定义)\n- **Reason**: 开源, DAG原生支持, 丰富的节点自定义能力\n\n## ADR-3: Topology — DAG only (no cycles)\n- **Chosen**: DAG拓扑\n- **Alternatives**: 支持循环 (状态管理复杂度指数级增长)\n- **Reason**: 覆盖95%业务场景, 大幅降低引擎复杂度",
+            "priority": "P0",
+            "source": { "origin": "compiled", "file_path": null, "skill": null }
+          },
+          {
+            "type": "review_findings",
+            "title": "Code Review 发现与修复",
+            "content": "# Code Review Findings\n\n## Finding 1 (major): React Flow edge direction\n- **Issue**: 节点连线source/target反转，导致DAG方向与实际执行方向相反\n- **Resolution**: 统一约定 source=上游节点, target=下游节点，修复EdgeComponent\n\n## Finding 2 (major): Temporal workflow timeout\n- **Issue**: 未设置workflow-level timeout，长时间运行的workflow无法自动终止\n- **Resolution**: 添加 workflow_run_timeout=24h 默认值，可在DSL中覆盖\n\n## Finding 3 (minor): DSL validation error messages\n- **Issue**: 环检测报错只说\"cycle detected\"，不指出具体节点\n- **Resolution**: 报错改为\"Cycle detected: nodeA → nodeB → nodeC → nodeA\"",
+            "priority": "P1",
+            "source": { "origin": "compiled", "file_path": null, "skill": "superpowers:requesting-code-review" }
+          },
+          {
+            "type": "implementation_plan",
+            "title": "12步实现计划",
+            "content": "# Implementation Plan\n\n1. 项目初始化：Next.js + FastAPI monorepo 结构\n2. DSL Schema 定义：JSON Schema for workflow definition\n3. DAG 验证器：拓扑排序 + 环检测\n4. Temporal Workflow 定义：WorkflowEngine activity\n5. 节点执行器：5种节点类型的执行逻辑\n6. FastAPI 路由：CRUD + execution endpoints\n7. React Flow 画布：基础拖拽和连线\n8. 节点属性面板：每种节点类型的配置表单\n9. DSL 导入/导出：JSON ↔ React Flow 转换\n10. 执行状态可视化：实时高亮当前执行节点\n11. 错误处理：重试策略 + 错误边界\n12. 集成测试：端到端工作流创建→执行→验证",
+            "priority": "P1",
+            "source": { "origin": "file", "file_path": "plans/workflow-engine-plan.md", "skill": "superpowers:writing-plans" }
+          },
+          {
+            "type": "requirement_qa",
+            "title": "需求澄清问答",
+            "content": "# Requirement Q&A\n\n**Q1**: 工作流是否需要支持循环（如 while loop）？\n**A1**: 不需要，DAG足够，覆盖当前所有业务场景。\n\n**Q2**: 并行节点的最大并发数？\n**A2**: 默认10，可在节点配置中调整。\n\n**Q3**: 节点执行失败后的策略？\n**A3**: 支持3种：立即失败、重试（最多3次 exponential backoff）、跳过继续。",
+            "priority": "P2",
+            "source": { "origin": "compiled", "file_path": null, "skill": "superpowers:brainstorming" }
+          }
+        ],
+        "context": {
+          "tech_stack": ["Next.js", "FastAPI", "Temporal", "React Flow", "PostgreSQL"],
+          "project_type": "web_app",
+          "domain": "workflow_engine"
+        }
       }
     }
   ]

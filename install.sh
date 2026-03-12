@@ -32,7 +32,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; }
 
 # ── Configuration ───────────────────────────────────────────────────────────
 PLUGIN_NAME="session-recorder"
-PLUGIN_VERSION="1.4.0"
+PLUGIN_VERSION="1.5.0"
 
 # Source: where install.sh lives (the repo/distribution directory)
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.0] - 2026-03-12
+
+### Added
+- report 新增 `artifacts` 字段：纳入 spec、plan、ADR、评审发现等 7 类产出物，信息损失率从 >99% 降至接近 0
+- report 新增 `context` 字段：tech_stack、project_type、domain，便于消费端快速判断适配难度
+- report 新增 `report_version` 字段：schema 版本标识，向后兼容
+- 新增 `review_finding` log 类型：捕获 spec/code review 中的评审发现
+- `decision` log 新增可选 `alternatives` 字段：记录被否决的替代方案及原因
+- Solution Replay Protocol 新增 Stage 0.5 (Artifact Loading)：消费端 AI 加载 spec/ADR/评审发现作为执行上下文
+- Stage 1.5/2 支持基于 artifact 的适配分析和执行
+
+### Changed
+- Final Report Compilation 新增 Step 3.5 (artifact 编译) 和 Step 3.6 (context 构建)
+- report-schema.json 移除 additionalProperties: false，支持新字段
+
 ## [1.4.0] - 2026-03-12
 
 ### Changed

@@ -59,7 +59,47 @@
     "error_message": {
       "type": "string",
       "description": "ALL errors encountered during the session concatenated with newlines. Includes: tool failures, user-reported issues, user corrections, runtime errors, AI mistakes. Format: '[Turn N] source: description'. Set to empty string only if zero errors occurred. Populated regardless of is_successful value."
+    },
+    "report_version": {
+      "type": "string",
+      "description": "Schema version. Current: '1.5.0'. Old reports without this field are v1.0."
+    },
+    "artifacts": {
+      "type": "array",
+      "description": "Session deliverables for AI-to-AI reuse. Sorted by priority (P0 first).",
+      "items": {
+        "type": "object",
+        "required": ["type", "title", "content", "priority"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["design_spec", "adr", "review_findings", "implementation_plan",
+                     "technical_comparison", "requirement_qa", "custom"]
+          },
+          "title": { "type": "string" },
+          "content": { "type": "string", "description": "Full content in markdown format." },
+          "priority": { "type": "string", "enum": ["P0", "P1", "P2"] },
+          "source": {
+            "type": "object",
+            "properties": {
+              "origin": { "type": "string", "enum": ["file", "conversation", "compiled"] },
+              "file_path": { "type": ["string", "null"] },
+              "skill": { "type": ["string", "null"] }
+            }
+          },
+          "content_truncated": { "type": "boolean", "default": false },
+          "content_summary": { "type": ["string", "null"], "default": null }
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "description": "Session metadata for quick adaptation assessment.",
+      "properties": {
+        "tech_stack": { "type": "array", "items": { "type": "string" } },
+        "project_type": { "type": ["string", "null"] },
+        "domain": { "type": ["string", "null"] }
+      }
     }
-  },
-  "additionalProperties": false
+  }
 }
