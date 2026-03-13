@@ -17,6 +17,24 @@ bash uninstall.sh --force    # Skip confirmations
 
 **After install, restart Claude Code.** The plugin activates automatically via Claude Code's native plugin system.
 
+### Local Development Testing
+
+To test changes without a full install cycle:
+1. Edit source files in this repo
+2. Run `bash install.sh` to copy to `~/.claude/plugins/cache/local/session-recorder/{version}/`
+3. Restart Claude Code to pick up changes
+
+To test the PostToolUse hook in isolation:
+```bash
+echo '{"tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":"file1 file2","cwd":"/tmp"}' | python3 hooks/post-tool-use
+cat /tmp/.session-recorder/session-log.jsonl  # verify output
+```
+
+To test the SessionStart hook:
+```bash
+bash hooks/session-start  # should output JSON with hookSpecificOutput
+```
+
 ## Architecture
 
 ```
@@ -47,8 +65,8 @@ AI judges task complete → compiles JSON report → POSTs to community server
 ### Key File Relationships
 
 - `skills/session-recorder/SKILL.md` — All runtime logic (state machine, logging rules, report compilation). Injected fresh every session by SessionStart hook. Version is declared in the YAML frontmatter at the top of the file.
-- `hooks/post-tool-use` — Infrastructure-level recording. Skips its own log writes (recursion guard). Falls back to `/tmp/.session-recorder/` if cwd not writable. Reads full tool data from stdin (64KB limit).
-- `references/report-schema.json` — JSON schema for final reports (8 fields: 5 original required + 3 optional v1.5.0 additions).
+- `hooks/post-tool-use` — Infrastructure-level recording. Skips its own log writes (recursion guard: checks for `session-log.jsonl` or `session-recorder` in bash commands). Falls back to `/tmp/.session-recorder/` if cwd not writable. Reads full tool data from stdin (64KB limit).
+- `references/report-schema.json` — JSON schema for final reports (8 fields: 5 required + 3 optional v1.5.0 additions).
 - `references/solution-replay-protocol.md` — 5-stage protocol for consuming community solutions (Stage 0.5 loads artifacts).
 - `references/log-examples.jsonl` and `references/report-examples.json` — AI reads these on-demand for format guidance.
 - `install.sh` — Copies files to `~/.claude/plugins/cache/local/session-recorder/{version}/`, registers `session-recorder@local` in `~/.claude/plugins/installed_plugins.json`, enables it in `~/.claude/settings.json["enabledPlugins"]`. Also migrates legacy manual hooks if upgrading from an older version.
@@ -76,6 +94,8 @@ Four files must have matching versions on every release:
 3. `install.sh` — `PLUGIN_VERSION="X.Y.Z"`
 4. `references/report-schema.json` — `"description"` field for `report_version` (documents current schema version)
 
+Current version: **1.6.0** (check `CHANGELOG.md` for history).
+
 ### Log Entry Rules
 
 - **Append-only** — never overwrite `session-log.jsonl`
@@ -100,3 +120,9 @@ Artifact types: `design_spec` (P0), `adr` (P0), `review_findings` (P1), `impleme
 ### Error Handling Philosophy
 
 Recording is secondary to user work. All failures (curl, file write, hook execution) are non-blocking. The plugin logs a console error and continues.
+
+### Git Workflow
+
+- `main` branch is the release branch
+- `dev` branch for active development
+- `.session-recorder/` is gitignored — runtime session data should never be committed
