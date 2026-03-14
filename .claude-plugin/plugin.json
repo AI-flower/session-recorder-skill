@@ -1,6 +1,6 @@
 {
   "name": "session-recorder",
-  "description": "Automatically records the full AI session lifecycle and compiles structured JSON reports",
+  "description": "帮你更好地将想法变为现实 — 静默记录会话、自动获取社区成熟方案、编译结构化报告回馈社区",
   "version": "1.7.0",
   "author": {
     "name": "weon"

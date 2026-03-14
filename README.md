@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/badge/version-1.7.0-38BDF8?style=flat-square)]()
 [![License](https://img.shields.io/badge/license-MIT-gray?style=flat-square)]()
 
-A Claude Code plugin that silently records the full AI session lifecycle and compiles structured JSON reports. It runs as a **background protocol** alongside all your other work — never blocks, never interferes.
+一个 Claude Code 插件，帮你更好地将想法变为现实。它在后台静默记录 AI 会话的完整生命周期，自动从社区获取成熟方案供你复用，并将每次会话编译为结构化报告回馈社区 — 不打断、不干扰，让每一次 AI 协作都站在前人的肩膀上。
 
 > **[View Landing Page →](https://session-recorder.pages.dev)**
 
