@@ -1,31 +1,33 @@
 # Session Recorder
 
+[![Live Demo](https://img.shields.io/badge/demo-session--recorder.pages.dev-22C55E?style=flat-square)](https://session-recorder.pages.dev)
+[![Version](https://img.shields.io/badge/version-1.7.0-38BDF8?style=flat-square)]()
+[![License](https://img.shields.io/badge/license-MIT-gray?style=flat-square)]()
+
 A Claude Code plugin that silently records the full AI session lifecycle and compiles structured JSON reports. It runs as a **background protocol** alongside all your other work — never blocks, never interferes.
+
+> **[View Landing Page →](https://session-recorder.pages.dev)**
 
 ## Features
 
-- **Session Lifecycle Recording** — Automatically tracks state transitions (IDLE → ACTIVE → DONE), tool calls, decisions, errors, and execution steps
-- **Solution Community** — Searches a shared solution database before starting work; reuse proven approaches from past sessions
-- **Adaptive Communication** — Detects user's domain expertise level per request and adjusts communication style accordingly
-- **Structured Reports** — Compiles session data into JSON reports and uploads to the community server
-- **Hook-Based Capture** — SessionStart and PostToolUse hooks auto-record tool calls without AI involvement
-- **Auto-Execute Mode** — Skip interactive confirmations; AI makes all decisions automatically
+- **Silent Lifecycle Recording** — 5 hooks auto-capture tool calls, user messages, AI responses. Zero interference with your workflow.
+- **Solution Community** — Searches a shared AI-to-AI solution database before starting work; reuse proven approaches from past sessions.
+- **Structured JSON Reports** — 8-field reports with artifacts, context, and execution plans. Schema v1.5.0 with 7 artifact types.
+- **3-State Machine** — IDLE → ACTIVE → DONE with automatic state transitions and context recovery after compaction.
+- **Adaptive Communication** — Detects user's domain expertise level per request and adjusts communication style accordingly.
+- **Auto-Execute Mode** — Skip interactive confirmations; AI makes all decisions automatically.
 
-## Installation
+## Quick Start
 
 ```bash
-bash install.sh
-```
+# Install
+git clone <repo-url> session-recorder
+cd session-recorder && bash install.sh
 
-This will:
-1. Copy plugin files to `~/.claude/plugins/cache/local/session-recorder/{version}/`
-2. Register plugin in `~/.claude/plugins/installed_plugins.json`
-3. Enable plugin in `~/.claude/settings.json` (`enabledPlugins`)
-4. Migrate away from old manual hooks (if upgrading from ≤1.5.0)
-
-Verify installation:
-```bash
+# Verify
 bash install.sh --check
+
+# Restart Claude Code — the plugin activates automatically
 ```
 
 ### Requirements
@@ -33,21 +35,9 @@ bash install.sh --check
 - Claude Code
 - Bash 4+
 - Python 3
-
-## Uninstallation
-
-```bash
-bash uninstall.sh
-```
-
-Or skip confirmations:
-```bash
-bash uninstall.sh --force
-```
+- macOS / Linux
 
 ## How It Works
-
-### State Machine
 
 ```
 IDLE ──→ ACTIVE ──→ DONE
@@ -61,6 +51,16 @@ IDLE ──→ ACTIVE ──→ DONE
 | IDLE | Session started, waiting for user's first substantive request |
 | ACTIVE | Working and recording every turn |
 | DONE | Task complete, compiling and submitting final report |
+
+### Hook Architecture
+
+| Hook | Language | Trigger | Purpose |
+|------|----------|---------|---------|
+| SessionStart | bash | `startup\|resume\|compact\|clear` | Injects SKILL.md + session event into context |
+| UserPromptSubmit | python3 | Every user message | Records full message content |
+| PostToolUse | python3 | Every tool call | Per-tool-type summaries with recursion guard |
+| Stop | python3 | Every AI reply ends | Records AI response + triggers report compilation |
+| SessionEnd | python3 | Session closes | Fallback: auto-compiles basic report if needed |
 
 ### Session Files
 
@@ -76,7 +76,7 @@ Each project generates local session data under `.session-recorder/`:
 
 > Add `.session-recorder/` to your `.gitignore` — these are local runtime files.
 
-### Report Structure
+### Report Schema (v1.5.0)
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -85,34 +85,45 @@ Each project generates local session data under `.session-recorder/`:
 | `execution_plan` | string | Numbered steps with phase, detail, outcome |
 | `is_successful` | boolean | Whether the task was completed successfully |
 | `error_message` | string | All errors encountered, empty if none |
-| `report_version` | string | Schema version (e.g. "1.5.0") |
-| `artifacts` | array | Session deliverables: specs, plans, ADRs, review findings |
-| `context` | object | Session metadata: tech_stack, project_type, domain |
+| `report_version` | string | Schema version ("1.5.0") |
+| `artifacts` | array | Deliverables: specs, plans, ADRs, review findings |
+| `context` | object | Metadata: tech_stack, project_type, domain |
 
 ## Project Structure
 
 ```
 session-recorder/
-├── install.sh               # One-click installer
-├── uninstall.sh             # Clean uninstaller
+├── install.sh                  # One-click installer
+├── uninstall.sh                # Clean uninstaller
+├── landing-page/
+│   └── index.html              # Project landing page (deployed to CF Pages)
 ├── .claude-plugin/
-│   └── plugin.json          # Plugin metadata (hooks + skills registration)
+│   └── plugin.json             # Plugin metadata
 ├── hooks/
-│   ├── hooks.json           # Hook configuration (SessionStart + PostToolUse)
-│   ├── session-start        # SessionStart hook (bash)
-│   ├── post-tool-use        # PostToolUse hook (python3)
-│   └── run-hook.cmd         # Windows/Unix polyglot hook runner
+│   ├── hooks.json              # Hook configuration
+│   ├── session-start           # SessionStart hook (bash)
+│   ├── user-prompt-submit      # UserPromptSubmit hook (python3)
+│   ├── post-tool-use           # PostToolUse hook (python3)
+│   ├── stop                    # Stop hook (python3)
+│   ├── session-end             # SessionEnd hook (python3)
+│   ├── session_recorder_utils.py  # Shared utilities
+│   └── run-hook.cmd            # Windows/Unix polyglot runner
 ├── skills/
 │   └── session-recorder/
-│       └── SKILL.md         # Core skill definition (injected every session)
-├── references/
-│   ├── report-schema.json   # Report JSON schema
-│   ├── report-examples.json # Example reports
-│   ├── log-examples.jsonl   # Good/bad log entry examples
-│   ├── communication-examples.md
-│   └── solution-replay-protocol.md
-└── docs/
-    └── report-content-analysis.md
+│       └── SKILL.md            # Core skill definition
+└── references/
+    ├── report-schema.json
+    ├── report-examples.json
+    ├── log-examples.jsonl
+    ├── communication-examples.md
+    └── solution-replay-protocol.md
+```
+
+## Uninstall
+
+```bash
+bash uninstall.sh           # Interactive
+bash uninstall.sh --force   # Skip confirmations
 ```
 
 ## License

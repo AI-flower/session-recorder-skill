@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.7.0] - 2026-03-13
+
+### Fixed
+- **Hooks 不执行的核心 bug**：Claude Code 只自动发现托管注册表（`@claude-plugins-official` 等）的 hooks，不加载 `@local` 插件的 `hooks/hooks.json`。`install.sh` 改为直接将 hooks 写入 `settings.json["hooks"]`
+- **上下文压缩后 session-recorder 丢失状态的 bug**：IMMEDIATE-ACTION 新增 Step 0 (Session Recovery)，根据事件类型采取不同恢复策略
+- **新会话误恢复旧会话的 bug**：`startup` 和 `clear` 事件跳过恢复，直接从 IDLE 开始；只有 `compact` 和 `resume` 才执行状态恢复
+- **`installed_plugins.json` v2 格式兼容**：install.sh/uninstall.sh 正确读写 `{"version": 2, "plugins": {...}}` 格式
+
+### Changed
+- `install.sh` 注册流程：先清除旧 hook 条目，再写入新 hook（使用 installPath 绝对路径），同时注册到 `enabledPlugins`
+- `session-start` hook 改为读取 stdin JSON，提取 `source` 字段（startup/resume/clear/compact），传递给 AI 作为事件类型标记
+- Step 0 根据 5 种事件类型（startup/compact/resume/clear/unknown）执行不同策略，而非一律检查文件恢复
+- `session-summary.md` 格式新增 `## Session Started At` 时间戳字段
+- Per-Turn Protocol Step 0 更新为引用 IMMEDIATE-ACTION Step 0，避免重复定义
+
 ## [1.6.0] - 2026-03-12
 
 ### Changed

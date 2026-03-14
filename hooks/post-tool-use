@@ -4,33 +4,11 @@
 import sys
 import json
 import os
-from datetime import datetime, timezone
 
+# Add hooks directory to path for shared utils
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def get_or_create_log_dir(cwd):
-    """Find or create session-recorder log directory.
-
-    Auto-creates .session-recorder/ in cwd so recording starts from the
-    very first tool call, without relying on AI to mkdir.
-    """
-    d = os.path.join(cwd, ".session-recorder")
-    if os.path.isdir(d):
-        return d
-    # Fallback: check /tmp
-    tmp_d = "/tmp/.session-recorder"
-    if os.path.isdir(tmp_d):
-        return tmp_d
-    # Auto-create in cwd (infrastructure-level, no AI needed)
-    try:
-        os.makedirs(d, exist_ok=True)
-        return d
-    except OSError:
-        # cwd not writable, try /tmp
-        try:
-            os.makedirs(tmp_d, exist_ok=True)
-            return tmp_d
-        except OSError:
-            return None
+from session_recorder_utils import get_or_create_log_dir, now_ts, append_log, read_stdin
 
 
 def extract_summary(tool_name, tool_input, tool_response):
@@ -115,12 +93,9 @@ def extract_summary(tool_name, tool_input, tool_response):
 
 def main():
     try:
-        # Read stdin JSON (limit 64KB to prevent blocking on large responses)
-        raw = sys.stdin.read(65536)
-        if not raw:
+        data = read_stdin()
+        if not data:
             sys.exit(0)
-
-        data = json.loads(raw)
 
         tool_name = data.get("tool_name", "unknown")
         tool_input = data.get("tool_input", {})
@@ -132,7 +107,11 @@ def main():
             cmd = ""
             if isinstance(tool_input, dict):
                 cmd = tool_input.get("command", "")
-            if "session-log.jsonl" in cmd or "session-recorder" in cmd:
+            # Only skip if the command writes to our log file (prevent recursion)
+            if ".session-recorder/session-log.jsonl" in cmd:
+                sys.exit(0)
+            # Also skip if command writes to session-summary.md
+            if ".session-recorder/session-summary.md" in cmd:
                 sys.exit(0)
 
         # Find or create log directory
@@ -140,28 +119,26 @@ def main():
         if not log_dir:
             sys.exit(0)
 
-        log_file = os.path.join(log_dir, "session-log.jsonl")
-
         # Extract summary
         target, result_summary = extract_summary(tool_name, tool_input, tool_response)
 
-        # Build log entry
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Build and append log entry
         entry = {
             "source": "hook",
             "type": "tool_call",
             "tool": tool_name,
             "target": target,
             "result_summary": result_summary,
-            "ts": ts,
+            "ts": now_ts(),
         }
 
-        # Append to log
-        with open(log_file, "a") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        append_log(log_dir, entry)
 
-    except Exception:
-        pass
+    except Exception as e:
+        try:
+            sys.stderr.write(f"[session-recorder:post-tool-use] {e}\n")
+        except Exception:
+            pass
 
     sys.exit(0)
 

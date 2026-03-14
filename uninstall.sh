@@ -3,8 +3,9 @@
 #  session-recorder — Uninstaller for Claude Code
 #
 #  Usage:
-#    bash uninstall.sh            # Interactive uninstall
-#    bash uninstall.sh --force    # Skip confirmations
+#    bash uninstall.sh              # Interactive uninstall
+#    bash uninstall.sh --force      # Skip confirmations
+#    bash uninstall.sh --clean-all  # Also remove /tmp session data
 #
 #  What it does:
 #    1. Removes plugin files from ~/.claude/plugins/cache/local/session-recorder/
@@ -39,8 +40,14 @@ SETTINGS_FILE="${HOME}/.claude/settings.json"
 INSTALLED_PLUGINS_FILE="${HOME}/.claude/plugins/installed_plugins.json"
 PREFS_FILE="${HOME}/.claude/memory/session-recorder-preferences.json"
 FORCE=false
+CLEAN_ALL=false
 
-[[ "${1:-}" == "--force" ]] && FORCE=true
+for arg in "$@"; do
+    case "$arg" in
+        --force) FORCE=true ;;
+        --clean-all) CLEAN_ALL=true ;;
+    esac
+done
 
 # ── Confirm helper ──────────────────────────────────────────────────────────
 confirm() {
@@ -92,8 +99,15 @@ installed_plugins_path = "${INSTALLED_PLUGINS_FILE}"
 if os.path.isfile(installed_plugins_path):
     with open(installed_plugins_path, "r") as f:
         installed = json.load(f)
-    if plugin_key in installed:
-        del installed[plugin_key]
+    # Support both v1 (flat) and v2 (nested under "plugins") formats
+    if "version" in installed and "plugins" in installed:
+        plugins = installed["plugins"]
+    else:
+        plugins = installed
+    if plugin_key in plugins:
+        del plugins[plugin_key]
+        if "plugins" in installed:
+            installed["plugins"] = plugins
         with open(installed_plugins_path, "w") as f:
             json.dump(installed, f, indent=2, ensure_ascii=False)
         print(f"  [OK] Removed {plugin_key} from installed_plugins.json")
@@ -120,7 +134,7 @@ else:
     else:
         print(f"  [--] {plugin_key} not in enabledPlugins")
 
-    # Legacy cleanup: remove old manually-written hooks (pre-1.6.0)
+    # Remove hooks written by install.sh (both current and legacy entries)
     hooks = settings.get("hooks", {})
     for hook_event in list(hooks.keys()):
         original_len = len(hooks[hook_event])
@@ -131,7 +145,7 @@ else:
         ]
         if len(hooks[hook_event]) != original_len:
             changed = True
-            print(f"  [OK] Removed legacy {hook_event} hook from settings.json")
+            print(f"  [OK] Removed {hook_event} hook from settings.json")
         if not hooks[hook_event]:
             del hooks[hook_event]
     if not hooks and "hooks" in settings:
@@ -165,6 +179,25 @@ remove_preferences() {
     fi
 }
 
+# ── Clean up session data ──────────────────────────────────────────────────
+clean_session_data() {
+    info "Cleaning up session data..."
+
+    # Clean /tmp session directories
+    local tmp_dirs=(/tmp/.session-recorder-* /tmp/.session-recorder)
+    for dir in "${tmp_dirs[@]}"; do
+        if [[ -d "$dir" ]]; then
+            if confirm "  Remove ${dir}?"; then
+                rm -rf "$dir"
+                success "  Removed ${dir}"
+            fi
+        fi
+    done
+
+    info "Note: .session-recorder/ directories in project folders are NOT removed."
+    info "Remove them manually if needed: find / -name .session-recorder -type d 2>/dev/null"
+}
+
 # ── Main ────────────────────────────────────────────────────────────────────
 main() {
     echo ""
@@ -192,6 +225,12 @@ main() {
     # Step 3: Remove preferences (optional)
     echo ""
     remove_preferences
+
+    # Step 4: Clean up runtime session data (optional)
+    if $CLEAN_ALL; then
+        echo ""
+        clean_session_data
+    fi
 
     # Done
     echo ""

@@ -40,13 +40,19 @@ bash hooks/session-start  # should output JSON with hookSpecificOutput
 ```
 SessionStart hook (bash) → injects skills/session-recorder/SKILL.md into system context
                 ↓
+UserPromptSubmit hook (python3) → auto-records each user message
+                ↓
 User works normally
                 ↓
 PostToolUse hook (python3) → auto-records every tool call to .session-recorder/session-log.jsonl
                 ↓
-AI logs decisions/interactions/errors (what hooks can't capture)
+AI logs decisions/execution_steps/errors (what hooks can't capture)
                 ↓
-AI judges task complete → compiles JSON report → POSTs to community server
+Stop hook (python3) → records AI response summary + triggers report if needed
+                ↓
+AI compiles JSON report → POSTs to community server
+                ↓
+SessionEnd hook (python3) → fallback: auto-compiles basic report if AI didn't
 ```
 
 **State machine**: `IDLE → ACTIVE → DONE` (→ back to IDLE on new task). No COMPLETING state — AI auto-generates report without user confirmation.
@@ -55,10 +61,13 @@ AI judges task complete → compiles JSON report → POSTs to community server
 
 | Hook | File | Language | Trigger | Purpose |
 |------|------|----------|---------|---------|
-| SessionStart | `hooks/session-start` | Bash | `startup\|resume\|clear\|compact` | Reads `skills/session-recorder/SKILL.md`, returns as `additionalContext` JSON |
+| SessionStart | `hooks/session-start` | Bash | `startup\|resume\|clear\|compact` | Reads stdin JSON for event `source`, injects `SKILL.md` + event type as `additionalContext` |
 | PostToolUse | `hooks/post-tool-use` | Python3 | Every tool call (`.*`) | Extracts per-tool-type summaries, appends to session log |
+| UserPromptSubmit | `hooks/user-prompt-submit` | Python3 | Every user message | Records full user message content |
+| Stop | `hooks/stop` | Python3 | Every AI reply ends | Records full AI response + blocks to trigger report compilation if needed (max once) |
+| SessionEnd | `hooks/session-end` | Python3 | Session closes | Fallback: compiles basic report from raw logs if no report exists |
 
-`hooks/hooks.json` declares both hooks using the `${CLAUDE_PLUGIN_ROOT}` variable — Claude Code substitutes the actual plugin `installPath` at runtime. This is the **live configuration** read by the plugin system; it is NOT a template.
+`hooks/hooks.json` declares hooks using `${CLAUDE_PLUGIN_ROOT}` variable — kept for reference and potential future plugin system support. However, **Claude Code currently only auto-discovers hooks from managed registries** (e.g. `@claude-plugins-official`). For local plugins (`@local`), `install.sh` writes hooks directly into `settings.json` with absolute paths.
 
 `hooks/run-hook.cmd` is a Windows/Unix polyglot wrapper used only for the bash `session-start` script (cross-platform). PostToolUse bypasses it and calls `python3` directly.
 
@@ -66,10 +75,14 @@ AI judges task complete → compiles JSON report → POSTs to community server
 
 - `skills/session-recorder/SKILL.md` — All runtime logic (state machine, logging rules, report compilation). Injected fresh every session by SessionStart hook. Version is declared in the YAML frontmatter at the top of the file.
 - `hooks/post-tool-use` — Infrastructure-level recording. Skips its own log writes (recursion guard: checks for `session-log.jsonl` or `session-recorder` in bash commands). Falls back to `/tmp/.session-recorder/` if cwd not writable. Reads full tool data from stdin (64KB limit).
+- `hooks/user-prompt-submit` — Records full user messages to session log (async, non-blocking).
+- `hooks/stop` — Records full AI responses and triggers report compilation. Uses `decision: "block"` to prevent AI from stopping when report is needed. Max one block per session (tracked via `stop_hook_block` log entry).
+- `hooks/session-end` — Fallback report compiler. Reads raw session-log.jsonl and auto-generates a basic report if none exists. Timeout: 10s (SessionEnd default is 1.5s).
+- `hooks/session_recorder_utils.py` — Shared utilities (log dir management, timestamp, log read/write, report detection) used by all Python hooks.
 - `references/report-schema.json` — JSON schema for final reports (8 fields: 5 required + 3 optional v1.5.0 additions).
 - `references/solution-replay-protocol.md` — 5-stage protocol for consuming community solutions (Stage 0.5 loads artifacts).
 - `references/log-examples.jsonl` and `references/report-examples.json` — AI reads these on-demand for format guidance.
-- `install.sh` — Copies files to `~/.claude/plugins/cache/local/session-recorder/{version}/`, registers `session-recorder@local` in `~/.claude/plugins/installed_plugins.json`, enables it in `~/.claude/settings.json["enabledPlugins"]`. Also migrates legacy manual hooks if upgrading from an older version.
+- `install.sh` — Copies files to `~/.claude/plugins/cache/local/session-recorder/{version}/`, registers `session-recorder@local` in `installed_plugins.json`, enables in `settings.json["enabledPlugins"]`, and **writes hooks directly to `settings.json["hooks"]`** with absolute paths (required for local plugins since Claude Code only auto-discovers hooks from managed registries).
 - `skills/` — Plugin skills directory. Claude Code auto-discovers all `SKILL.md` files under this directory and registers them as `session-recorder:<skill-name>` via the `"skills": "./skills/"` field in `plugin.json`. Add new skills as subdirectories here.
 
 ### Runtime File Layout (per-session, in cwd)
@@ -94,7 +107,7 @@ Four files must have matching versions on every release:
 3. `install.sh` — `PLUGIN_VERSION="X.Y.Z"`
 4. `references/report-schema.json` — `"description"` field for `report_version` (documents current schema version)
 
-Current version: **1.6.0** (check `CHANGELOG.md` for history).
+Current version: **1.7.0** (check `CHANGELOG.md` for history).
 
 ### Log Entry Rules
 

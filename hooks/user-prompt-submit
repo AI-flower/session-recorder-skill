@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""user-prompt-submit: Record user messages to session log."""
+
+import sys
+import os
+
+# Add hooks directory to path for shared utils
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from session_recorder_utils import get_or_create_log_dir, now_ts, append_log, read_stdin
+
+
+def main():
+    try:
+        data = read_stdin()
+        if not data:
+            sys.exit(0)
+
+        prompt = data.get("prompt", "")
+        cwd = data.get("cwd", os.getcwd())
+
+        if not prompt:
+            sys.exit(0)
+
+        log_dir = get_or_create_log_dir(cwd)
+        if not log_dir:
+            sys.exit(0)
+
+        entry = {
+            "source": "hook",
+            "type": "user_message",
+            "content": prompt,
+            "ts": now_ts(),
+        }
+
+        append_log(log_dir, entry)
+
+    except Exception as e:
+        try:
+            sys.stderr.write(f"[session-recorder:user-prompt-submit] {e}\n")
+        except Exception:
+            pass
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

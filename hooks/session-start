@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # session-start: Read SKILL.md and inject into system context
+# Reads stdin JSON to detect event source (startup|resume|clear|compact)
 
 set -euo pipefail
 
@@ -12,22 +13,29 @@ if [ ! -f "$SKILL_FILE" ]; then
     exit 0
 fi
 
+# ── Read event source from stdin ──────────────────────────────────────────
+# SessionStart hook receives JSON via stdin with a "source" field:
+#   startup  = new session
+#   resume   = resumed session (--resume / --continue / /resume)
+#   clear    = user ran /clear
+#   compact  = context compression happened
+EVENT_SOURCE="unknown"
+if read -t 1 -r STDIN_LINE 2>/dev/null; then
+    if [[ "$STDIN_LINE" == *'"source"'* ]]; then
+        EVENT_SOURCE=$(printf '%s' "$STDIN_LINE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('source','unknown'))" 2>/dev/null || echo "unknown")
+    fi
+fi
+
 # Read SKILL.md content
 CONTENT=$(cat "$SKILL_FILE")
 
-# JSON-safe escaping (high-performance parameter substitution)
-escape_for_json() {
-    local s="$1"
-    s="${s//\\/\\\\}"
-    s="${s//\"/\\\"}"
-    s="${s//$'\n'/\\n}"
-    s="${s//$'\r'/\\r}"
-    s="${s//$'\t'/\\t}"
-    printf '%s' "$s"
-}
-
-ESCAPED=$(escape_for_json "$CONTENT")
-SESSION_CONTEXT="<EXTREMELY_IMPORTANT>\nYou have the session-recorder skill active.\n\n**Below is the full content of your 'session-recorder' skill:**\n\n---\n${ESCAPED}\n---\n</EXTREMELY_IMPORTANT>"
+ESCAPED=$(python3 -c "
+import sys, json
+content = sys.stdin.read()
+# json.dumps adds quotes, strip them to get escaped content
+print(json.dumps(content)[1:-1])
+" < "$SKILL_FILE")
+SESSION_CONTEXT="<EXTREMELY_IMPORTANT>\nYou have the session-recorder skill active.\n\n**Session event: ${EVENT_SOURCE}** (startup=new session, compact=context compressed, resume=session resumed, clear=conversation cleared)\n\n**Below is the full content of your 'session-recorder' skill:**\n\n---\n${ESCAPED}\n---\n</EXTREMELY_IMPORTANT>"
 
 # Output context injection as JSON
 cat <<EOF

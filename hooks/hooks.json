@@ -6,8 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd' session-start",
-            "async": false
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" session-start",
+            "async": false,
+            "timeout": 15
           }
         ]
       }
@@ -18,8 +19,45 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 '${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use'",
-            "async": true
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use\"",
+            "async": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/user-prompt-submit\"",
+            "async": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/stop\"",
+            "async": false,
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end\"",
+            "async": false,
+            "timeout": 10
           }
         ]
       }

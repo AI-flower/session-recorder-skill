@@ -1,2 +1,7 @@
 .claude/
 .session-recorder/
+.playwright-mcp/
+.wrangler/
+hooks/__pycache__/
+landing-page-deployed.png
+landing-page-preview.png
