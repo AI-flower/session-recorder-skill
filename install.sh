@@ -47,9 +47,9 @@ INSTALLED_PLUGINS_FILE="${HOME}/.claude/plugins/installed_plugins.json"
 
 # ── Pre-flight checks ──────────────────────────────────────────────────────
 preflight() {
-    # Check bash version
-    if [[ "${BASH_VERSINFO[0]}" -lt 4 ]]; then
-        error "Bash 4+ is required (you have ${BASH_VERSION})."
+    # Check bash version (3+ required; no bash 4+ features used)
+    if [[ "${BASH_VERSINFO[0]}" -lt 3 ]]; then
+        error "Bash 3+ is required (you have ${BASH_VERSION})."
         error "Please upgrade bash and try again."
         exit 1
     fi
@@ -247,19 +247,29 @@ copy_files_to() {
     mkdir -p "${dest}/references"
     mkdir -p "${dest}/skills/session-recorder"
 
-    # Copy core files
-    cp "${SOURCE_DIR}/skills/session-recorder/SKILL.md" "${dest}/skills/session-recorder/SKILL.md"
-    cp "${SOURCE_DIR}/.claude-plugin/plugin.json" "${dest}/.claude-plugin/plugin.json"
-
-    # Copy hooks
-    cp "${SOURCE_DIR}/hooks/session-start" "${dest}/hooks/session-start"
-    cp "${SOURCE_DIR}/hooks/post-tool-use" "${dest}/hooks/post-tool-use"
-    cp "${SOURCE_DIR}/hooks/user-prompt-submit" "${dest}/hooks/user-prompt-submit"
-    cp "${SOURCE_DIR}/hooks/stop" "${dest}/hooks/stop"
-    cp "${SOURCE_DIR}/hooks/session-end" "${dest}/hooks/session-end"
-    cp "${SOURCE_DIR}/hooks/session_recorder_utils.py" "${dest}/hooks/session_recorder_utils.py"
-    cp "${SOURCE_DIR}/hooks/run-hook.cmd" "${dest}/hooks/run-hook.cmd"
-    cp "${SOURCE_DIR}/hooks/hooks.json" "${dest}/hooks/hooks.json"
+    # Copy core files (fail fast on missing files)
+    local critical_files=(
+        "skills/session-recorder/SKILL.md"
+        ".claude-plugin/plugin.json"
+        "hooks/session-start"
+        "hooks/post-tool-use"
+        "hooks/user-prompt-submit"
+        "hooks/stop"
+        "hooks/session-end"
+        "hooks/session_recorder_utils.py"
+        "hooks/run-hook.cmd"
+        "hooks/hooks.json"
+    )
+    for f in "${critical_files[@]}"; do
+        if [[ ! -f "${SOURCE_DIR}/${f}" ]]; then
+            error "Missing critical source file: ${f}"
+            exit 1
+        fi
+        cp "${SOURCE_DIR}/${f}" "${dest}/${f}" || {
+            error "Failed to copy: ${f}"
+            exit 1
+        }
+    done
 
     # Copy references
     for f in "${SOURCE_DIR}/references/"*; do
@@ -274,7 +284,7 @@ copy_files_to() {
     chmod +x "${dest}/hooks/session-end"
     chmod +x "${dest}/hooks/run-hook.cmd"
 
-    success "Plugin files copied."
+    success "Plugin files copied (${#critical_files[@]} critical files verified)."
 }
 
 # ── Register plugin via native plugin system ─────────────────────────────────

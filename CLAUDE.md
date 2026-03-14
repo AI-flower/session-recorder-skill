@@ -24,15 +24,24 @@ To test changes without a full install cycle:
 2. Run `bash install.sh` to copy to `~/.claude/plugins/cache/local/session-recorder/{version}/`
 3. Restart Claude Code to pick up changes
 
-To test the PostToolUse hook in isolation:
+To test individual hooks in isolation (each reads JSON from stdin):
 ```bash
+# PostToolUse — records a tool call
 echo '{"tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":"file1 file2","cwd":"/tmp"}' | python3 hooks/post-tool-use
-cat /tmp/.session-recorder/session-log.jsonl  # verify output
-```
+cat /tmp/.session-recorder/session-log.jsonl
 
-To test the SessionStart hook:
-```bash
-bash hooks/session-start  # should output JSON with hookSpecificOutput
+# SessionStart — injects SKILL.md into context (test each event type)
+echo '{"source":"startup"}' | bash hooks/session-start
+echo '{"source":"compact"}' | bash hooks/session-start  # triggers recovery
+
+# UserPromptSubmit — records user message
+echo '{"prompt":"hello world","cwd":"/tmp"}' | python3 hooks/user-prompt-submit
+
+# Stop — records AI response, may block for report
+echo '{"last_assistant_message":"done","cwd":"/tmp"}' | python3 hooks/stop
+
+# SessionEnd — fallback report compilation
+echo '{"cwd":"/tmp"}' | python3 hooks/session-end
 ```
 
 ## Architecture
@@ -76,8 +85,8 @@ SessionEnd hook (python3) → fallback: auto-compiles basic report if AI didn't
 - `skills/session-recorder/SKILL.md` — All runtime logic (state machine, logging rules, report compilation). Injected fresh every session by SessionStart hook. Version is declared in the YAML frontmatter at the top of the file.
 - `hooks/post-tool-use` — Infrastructure-level recording. Skips its own log writes (recursion guard: checks for `session-log.jsonl` or `session-recorder` in bash commands). Falls back to `/tmp/.session-recorder/` if cwd not writable. Reads full tool data from stdin (64KB limit).
 - `hooks/user-prompt-submit` — Records full user messages to session log (async, non-blocking).
-- `hooks/stop` — Records full AI responses and triggers report compilation. Uses `decision: "block"` to prevent AI from stopping when report is needed. Max one block per session (tracked via `stop_hook_block` log entry).
-- `hooks/session-end` — Fallback report compiler. Reads raw session-log.jsonl and auto-generates a basic report if none exists. Timeout: 10s (SessionEnd default is 1.5s).
+- `hooks/stop` — Records full AI responses and triggers report compilation. Uses `decision: "block"` to prevent AI from stopping when report is needed. Max one block per session (tracked via `stop_hook_block` log entry). Block condition: session ACTIVE + no report + not already blocked.
+- `hooks/session-end` — Fallback report compiler. Reads raw session-log.jsonl and auto-generates a basic report if none exists. Timeout: 10s (SessionEnd default is 1.5s). Waits 2s if Stop hook already blocked (gives AI time to compile its own report first).
 - `hooks/session_recorder_utils.py` — Shared utilities (log dir management, timestamp, log read/write, report detection) used by all Python hooks.
 - `references/report-schema.json` — JSON schema for final reports (8 fields: 5 required + 3 optional v1.5.0 additions).
 - `references/solution-replay-protocol.md` — 5-stage protocol for consuming community solutions (Stage 0.5 loads artifacts).
@@ -129,6 +138,14 @@ Artifact types: `design_spec` (P0), `adr` (P0), `review_findings` (P1), `impleme
 - **Required**: bash 4+, python3
 - **Optional**: `find-skills` (auto-installs via npx on first use, non-blocking if fails)
 - **External API**: `https://cookbook-dev.ominieye.dev/api/solutions` — all calls use `--connect-timeout 5 --max-time 10`, failures are non-blocking
+
+### Key Constants (session_recorder_utils.py)
+
+- `MAX_CONTENT_SIZE`: 50KB per log field (truncated if exceeded)
+- `MAX_LOG_SIZE`: 10MB for session-log.jsonl (reads only last 10MB)
+- Stdin limit: 64KB per hook invocation
+- File locking: `fcntl.flock()` for concurrent write safety
+- Fallback dir: `/tmp/.session-recorder-{uid}/` when cwd not writable
 
 ### Error Handling Philosophy
 
