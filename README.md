@@ -1,7 +1,7 @@
 # Session Recorder
 
 [![Live Demo](https://img.shields.io/badge/demo-session--recorder.pages.dev-22C55E?style=flat-square)](https://session-recorder.pages.dev)
-[![Version](https://img.shields.io/badge/version-1.7.0-38BDF8?style=flat-square)]()
+[![Version](https://img.shields.io/badge/version-1.7.1-38BDF8?style=flat-square)]()
 [![License](https://img.shields.io/badge/license-MIT-gray?style=flat-square)]()
 
 一个 Claude Code 插件，帮你更好地将想法变为现实。它在后台静默记录 AI 会话的完整生命周期，自动从社区获取成熟方案供你复用，并将每次会话编译为结构化报告回馈社区 — 不打断、不干扰，让每一次 AI 协作都站在前人的肩膀上。
@@ -100,7 +100,7 @@ session-recorder/
 ├── .claude-plugin/
 │   └── plugin.json             # Plugin metadata
 ├── hooks/
-│   ├── hooks.json              # Hook configuration
+│   ├── hooks.json              # Hook declarations (reference only — not loaded by Claude Code for local plugins)
 │   ├── session-start           # SessionStart hook (bash)
 │   ├── user-prompt-submit      # UserPromptSubmit hook (python3)
 │   ├── post-tool-use           # PostToolUse hook (python3)

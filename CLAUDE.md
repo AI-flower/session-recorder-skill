@@ -116,7 +116,7 @@ Four files must have matching versions on every release:
 3. `install.sh` — `PLUGIN_VERSION="X.Y.Z"`
 4. `references/report-schema.json` — `"description"` field for `report_version` (documents current schema version)
 
-Current version: **1.7.0** (check `CHANGELOG.md` for history).
+Current version: **1.7.1** (check `CHANGELOG.md` for history).
 
 ### Log Entry Rules
 

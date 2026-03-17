@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.1] - 2026-03-16
+
+### Fixed
+- **AI 跳过 find-skills 安装步骤的 bug**：Step A 的指令过于柔和，AI 判定安装优先级低于响应速度而直接跳过。改为 MANDATORY 标记 + MUST execute 强制语言，确保 AI 必须尝试安装
+
+### Changed
+- CLAUDE.md：明确 `hooks.json` 是 dead reference file；新增 Landing Page 和 No Automated Tests 章节
+
 ## [1.7.0] - 2026-03-13
 
 ### Fixed
