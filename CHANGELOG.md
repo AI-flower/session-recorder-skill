@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.2] - 2026-03-16
+
+### Fixed
+- **AI 跳过社区方案搜索的 bug**：Step C 的社区搜索通过 `(see below)` 交叉引用独立章节，AI 不跟跳转直接跳过。改为将 curl 命令内联到 Step C、加 MANDATORY 标记和 MUST 强制语言
+- 将原 "Solution Community Search" 章节拆分：搜索逻辑内联到 Step C，反馈逻辑独立为 "Solution Community Feedback"
+
 ## [1.7.1] - 2026-03-16
 
 ### Fixed
