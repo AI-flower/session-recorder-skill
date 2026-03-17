@@ -76,9 +76,9 @@ SessionEnd hook (python3) → fallback: auto-compiles basic report if AI didn't
 | Stop | `hooks/stop` | Python3 | Every AI reply ends | Records full AI response + blocks to trigger report compilation if needed (max once) |
 | SessionEnd | `hooks/session-end` | Python3 | Session closes | Fallback: compiles basic report from raw logs if no report exists |
 
-`hooks/hooks.json` declares hooks using `${CLAUDE_PLUGIN_ROOT}` variable — kept for reference and potential future plugin system support. However, **Claude Code currently only auto-discovers hooks from managed registries** (e.g. `@claude-plugins-official`). For local plugins (`@local`), `install.sh` writes hooks directly into `settings.json` with absolute paths.
+**Important distinction**: `hooks/hooks.json` is a **dead reference file** — Claude Code does NOT load it for local plugins. `install.sh` writes hooks directly into `settings.json` with absolute paths. `hooks.json` is kept only for documentation and potential future plugin system support.
 
-`hooks/run-hook.cmd` is a Windows/Unix polyglot wrapper used only for the bash `session-start` script (cross-platform). PostToolUse bypasses it and calls `python3` directly.
+`hooks/run-hook.cmd` is a Windows/Unix polyglot wrapper used only for the bash `session-start` script (cross-platform). Python hooks are called directly.
 
 ### Key File Relationships
 
@@ -151,8 +151,16 @@ Artifact types: `design_spec` (P0), `adr` (P0), `review_findings` (P1), `impleme
 
 Recording is secondary to user work. All failures (curl, file write, hook execution) are non-blocking. The plugin logs a console error and continues.
 
+### Landing Page
+
+`landing-page/index.html` is a standalone HTML page deployed to Cloudflare Pages at `session-recorder.pages.dev`. It uses `.wrangler/` for local CF tooling. Edit the single HTML file directly — no build step.
+
 ### Git Workflow
 
 - `main` branch is the release branch
 - `dev` branch for active development
 - `.session-recorder/` is gitignored — runtime session data should never be committed
+
+### No Automated Tests
+
+There is no test suite. Testing is done manually by piping JSON into individual hooks (see "Local Development Testing" above). The hooks are simple stdin→file-append scripts, so manual verification is sufficient.

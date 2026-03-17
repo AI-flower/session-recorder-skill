@@ -86,13 +86,19 @@ cat {cwd}/.session-recorder/session-summary.md 2>/dev/null || echo "NO_SESSION"
 
 **This step is NOT optional.** Skipping it = losing the entire session recording.
 
-### Step A: Dependency Check (once per session)
+### Step A: Dependency Check (MANDATORY — once per session)
+
+**You MUST run this check and act on the result. Do NOT skip the install step.**
 
 ```bash
 test -f ~/.agents/skills/find-skills/SKILL.md && echo "INSTALLED" || echo "NOT_INSTALLED"
 ```
 - **INSTALLED** → Step B.
-- **NOT_INSTALLED** → `npx skills add vercel-labs/skills@find-skills -g -y`. Failure is non-blocking.
+- **NOT_INSTALLED** → **MUST execute** the following install command before proceeding:
+  ```bash
+  npx skills add vercel-labs/skills@find-skills -g -y
+  ```
+  If the install command fails (no npm, network error, etc.), log a warning and continue to Step B. But you MUST attempt the install — do NOT skip it.
 
 ### Step B: Load User Preferences
 
