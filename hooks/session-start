@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # session-start: Read SKILL.md and inject into system context
-# Reads stdin JSON to detect event source (startup|resume|clear|compact)
+# Reads stdin JSON to detect event source and platform (Claude Code vs Codex)
+#
+# Claude Code: injects full SKILL.md as additionalContext
+# Codex CLI:   SKILL.md loaded via AGENTS.md; only injects session event tag
 
 set -euo pipefail
 
@@ -13,29 +16,39 @@ if [ ! -f "$SKILL_FILE" ]; then
     exit 0
 fi
 
-# ── Read event source from stdin ──────────────────────────────────────────
+# ── Read stdin and detect event source + platform ─────────────────────────
 # SessionStart hook receives JSON via stdin with a "source" field:
 #   startup  = new session
-#   resume   = resumed session (--resume / --continue / /resume)
+#   resume   = resumed session
 #   clear    = user ran /clear
-#   compact  = context compression happened
+#   compact  = context compression (Claude Code only)
+# Codex CLI also includes "hook_event_name" in stdin JSON.
 EVENT_SOURCE="unknown"
+IS_CODEX=false
+STDIN_LINE=""
 if read -t 1 -r STDIN_LINE 2>/dev/null; then
     if [[ "$STDIN_LINE" == *'"source"'* ]]; then
         EVENT_SOURCE=$(printf '%s' "$STDIN_LINE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('source','unknown'))" 2>/dev/null || echo "unknown")
     fi
+    if [[ "$STDIN_LINE" == *'"hook_event_name"'* ]]; then
+        IS_CODEX=true
+    fi
 fi
 
-# Read SKILL.md content
-CONTENT=$(cat "$SKILL_FILE")
-
-ESCAPED=$(python3 -c "
+# ── Build context based on platform ──────────────────────────────────────
+if [ "$IS_CODEX" = true ]; then
+    # Codex: SKILL.md is loaded via ~/.codex/AGENTS.md (auto-loaded by Codex)
+    # Only inject session event tag as additionalContext
+    SESSION_CONTEXT="**Session event: ${EVENT_SOURCE}** (startup=new session, resume=session resumed, clear=conversation cleared). The session-recorder plugin is active — see AGENTS.md for full protocol."
+else
+    # Claude Code: inject full SKILL.md as additionalContext
+    ESCAPED=$(python3 -c "
 import sys, json
 content = sys.stdin.read()
-# json.dumps adds quotes, strip them to get escaped content
 print(json.dumps(content)[1:-1])
 " < "$SKILL_FILE")
-SESSION_CONTEXT="<EXTREMELY_IMPORTANT>\nYou have the session-recorder skill active.\n\n**Session event: ${EVENT_SOURCE}** (startup=new session, compact=context compressed, resume=session resumed, clear=conversation cleared)\n\n**Below is the full content of your 'session-recorder' skill:**\n\n---\n${ESCAPED}\n---\n</EXTREMELY_IMPORTANT>"
+    SESSION_CONTEXT="<EXTREMELY_IMPORTANT>\nYou have the session-recorder skill active.\n\n**Session event: ${EVENT_SOURCE}** (startup=new session, compact=context compressed, resume=session resumed, clear=conversation cleared)\n\n**Below is the full content of your 'session-recorder' skill:**\n\n---\n${ESCAPED}\n---\n</EXTREMELY_IMPORTANT>"
+fi
 
 # Output context injection as JSON
 cat <<EOF

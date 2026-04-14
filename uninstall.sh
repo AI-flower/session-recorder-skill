@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
 # ============================================================================
-#  session-recorder — Uninstaller for Claude Code
+#  session-recorder — Uninstaller for Claude Code & Codex CLI
 #
 #  Usage:
 #    bash uninstall.sh              # Interactive uninstall
 #    bash uninstall.sh --force      # Skip confirmations
 #    bash uninstall.sh --clean-all  # Also remove /tmp session data
-#
-#  What it does:
-#    1. Removes plugin files from ~/.claude/plugins/cache/local/session-recorder/
-#    2. Removes entry from ~/.claude/plugins/installed_plugins.json
-#    3. Removes entry from ~/.claude/settings.json enabledPlugins
-#    4. Cleans up any legacy manual hooks (from pre-1.6.0 installs)
-#    5. Optionally removes user preferences
 #
 #  Requirements: python3 (for JSON editing)
 # ============================================================================
@@ -35,12 +28,22 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; }
 # ── Configuration ───────────────────────────────────────────────────────────
 PLUGIN_NAME="session-recorder"
 PLUGIN_KEY="${PLUGIN_NAME}@local"
-PLUGIN_DIR="${HOME}/.claude/plugins/cache/local/${PLUGIN_NAME}"
-SETTINGS_FILE="${HOME}/.claude/settings.json"
-INSTALLED_PLUGINS_FILE="${HOME}/.claude/plugins/installed_plugins.json"
-PREFS_FILE="${HOME}/.claude/memory/session-recorder-preferences.json"
 FORCE=false
 CLEAN_ALL=false
+
+# Claude Code paths
+CLAUDE_DIR="${HOME}/.claude"
+CC_PLUGIN_DIR="${CLAUDE_DIR}/plugins/cache/local/${PLUGIN_NAME}"
+CC_SETTINGS_FILE="${CLAUDE_DIR}/settings.json"
+CC_INSTALLED_PLUGINS_FILE="${CLAUDE_DIR}/plugins/installed_plugins.json"
+CC_PREFS_FILE="${CLAUDE_DIR}/memory/session-recorder-preferences.json"
+
+# Codex CLI paths
+CODEX_DIR="${HOME}/.codex"
+CX_PLUGIN_DIR="${CODEX_DIR}/plugins/${PLUGIN_NAME}"
+CX_HOOKS_FILE="${CODEX_DIR}/hooks.json"
+CX_AGENTS_FILE="${CODEX_DIR}/AGENTS.md"
+CX_PREFS_FILE="${CODEX_DIR}/session-recorder-preferences.json"
 
 for arg in "$@"; do
     case "$arg" in
@@ -49,7 +52,6 @@ for arg in "$@"; do
     esac
 done
 
-# ── Confirm helper ──────────────────────────────────────────────────────────
 confirm() {
     if $FORCE; then return 0; fi
     local msg="$1"
@@ -57,133 +59,145 @@ confirm() {
     [[ "${answer}" =~ ^[Yy]$ ]]
 }
 
-# ── Remove plugin files ────────────────────────────────────────────────────
-remove_plugin_files() {
-    if [[ -d "${PLUGIN_DIR}" ]]; then
-        info "Found plugin directory: ${PLUGIN_DIR}"
-        local versions
-        versions=$(ls -1 "${PLUGIN_DIR}" 2>/dev/null || true)
-        if [[ -n "${versions}" ]]; then
-            echo "  Installed versions: ${versions}"
-        fi
-        if confirm "  Remove all plugin files?"; then
-            rm -rf "${PLUGIN_DIR}"
-            success "Plugin files removed."
-        else
-            info "Skipped plugin file removal."
-            return 1
-        fi
-    else
-        info "No plugin files found (already removed)."
-    fi
-}
+# ============================================================================
+#  Claude Code cleanup
+# ============================================================================
 
-# ── Deregister plugin from Claude Code plugin system ──────────────────────
-deregister_plugin() {
-    if ! command -v python3 &>/dev/null; then
-        error "python3 required for safe JSON editing. Please deregister plugin manually."
-        return
+uninstall_claude_code() {
+    info "Removing from Claude Code ..."
+
+    # Remove plugin files
+    if [[ -d "${CC_PLUGIN_DIR}" ]]; then
+        rm -rf "${CC_PLUGIN_DIR}"
+        success "Plugin files removed: ${CC_PLUGIN_DIR}"
     fi
 
-    info "Deregistering plugin from Claude Code plugin system ..."
-
-    python3 << PYEOF
+    # Deregister from settings/plugins
+    if command -v python3 &>/dev/null; then
+        python3 << PYEOF
 import json, os
 
 plugin_key = "${PLUGIN_KEY}"
 plugin_name = "${PLUGIN_NAME}"
-settings_path = "${SETTINGS_FILE}"
-installed_plugins_path = "${INSTALLED_PLUGINS_FILE}"
+settings_path = "${CC_SETTINGS_FILE}"
+installed_plugins_path = "${CC_INSTALLED_PLUGINS_FILE}"
 
-# ── Step 1: Remove from installed_plugins.json ──
+# Remove from installed_plugins.json
 if os.path.isfile(installed_plugins_path):
-    with open(installed_plugins_path, "r") as f:
+    with open(installed_plugins_path) as f:
         installed = json.load(f)
-    # Support both v1 (flat) and v2 (nested under "plugins") formats
-    if "version" in installed and "plugins" in installed:
-        plugins = installed["plugins"]
-    else:
-        plugins = installed
+    plugins = installed.get("plugins", installed)
     if plugin_key in plugins:
         del plugins[plugin_key]
         if "plugins" in installed:
             installed["plugins"] = plugins
         with open(installed_plugins_path, "w") as f:
             json.dump(installed, f, indent=2, ensure_ascii=False)
-        print(f"  [OK] Removed {plugin_key} from installed_plugins.json")
-    else:
-        print(f"  [--] {plugin_key} not found in installed_plugins.json (already removed)")
-else:
-    print("  [--] installed_plugins.json not found")
+        print(f"  [OK] Removed from installed_plugins.json")
 
-# ── Step 2: Update settings.json ──
-if not os.path.isfile(settings_path):
-    print("  [--] settings.json not found")
-else:
-    with open(settings_path, "r") as f:
+# Remove from settings.json
+if os.path.isfile(settings_path):
+    with open(settings_path) as f:
         settings = json.load(f)
-
     changed = False
-
-    # Remove from enabledPlugins
     enabled = settings.get("enabledPlugins", {})
     if plugin_key in enabled:
         del enabled[plugin_key]
         changed = True
-        print(f"  [OK] Removed {plugin_key} from enabledPlugins")
-    else:
-        print(f"  [--] {plugin_key} not in enabledPlugins")
-
-    # Remove hooks written by install.sh (both current and legacy entries)
     hooks = settings.get("hooks", {})
-    for hook_event in list(hooks.keys()):
-        original_len = len(hooks[hook_event])
-        hooks[hook_event] = [
-            entry for entry in hooks[hook_event]
-            if not any(plugin_name in h.get("command", "")
-                       for h in entry.get("hooks", []))
-        ]
-        if len(hooks[hook_event]) != original_len:
+    for event in list(hooks.keys()):
+        orig = len(hooks[event])
+        hooks[event] = [e for e in hooks[event]
+                        if not any(plugin_name in h.get("command","")
+                                   for h in e.get("hooks",[]))]
+        if len(hooks[event]) != orig:
             changed = True
-            print(f"  [OK] Removed {hook_event} hook from settings.json")
-        if not hooks[hook_event]:
-            del hooks[hook_event]
+        if not hooks[event]:
+            del hooks[event]
     if not hooks and "hooks" in settings:
         del settings["hooks"]
-
     if changed:
         with open(settings_path, "w") as f:
             json.dump(settings, f, indent=2, ensure_ascii=False)
-        print("  [OK] settings.json updated")
-    else:
-        print("  [--] No changes needed in settings.json")
+        print(f"  [OK] Cleaned settings.json")
 PYEOF
-
-    if [[ $? -eq 0 ]]; then
-        success "Plugin deregistered."
-    else
-        error "Failed to deregister plugin. Please edit ${SETTINGS_FILE} and ${INSTALLED_PLUGINS_FILE} manually."
     fi
-}
 
-# ── Remove user preferences ────────────────────────────────────────────────
-remove_preferences() {
-    if [[ -f "${PREFS_FILE}" ]]; then
-        info "Found user preferences: ${PREFS_FILE}"
-        if confirm "  Remove user preferences? (domain familiarity data will be lost)"; then
-            rm -f "${PREFS_FILE}"
-            success "User preferences removed."
-        else
-            info "Kept user preferences."
+    # Remove preferences
+    if [[ -f "${CC_PREFS_FILE}" ]]; then
+        if confirm "  Remove Claude Code preferences?"; then
+            rm -f "${CC_PREFS_FILE}"
+            success "Preferences removed."
         fi
     fi
+
+    success "Claude Code cleanup done."
 }
 
-# ── Clean up session data ──────────────────────────────────────────────────
+# ============================================================================
+#  Codex CLI cleanup
+# ============================================================================
+
+uninstall_codex() {
+    info "Removing from Codex CLI ..."
+
+    # Remove plugin files
+    if [[ -d "${CX_PLUGIN_DIR}" ]]; then
+        rm -rf "${CX_PLUGIN_DIR}"
+        success "Plugin files removed: ${CX_PLUGIN_DIR}"
+    fi
+
+    # Remove hooks from hooks.json
+    if [[ -f "${CX_HOOKS_FILE}" ]] && command -v python3 &>/dev/null; then
+        python3 -c "
+import json
+plugin_name = '${PLUGIN_NAME}'
+with open('${CX_HOOKS_FILE}') as f:
+    data = json.load(f)
+hooks = data.get('hooks', {})
+for event in list(hooks.keys()):
+    hooks[event] = [e for e in hooks[event]
+                    if not any(plugin_name in h.get('command','')
+                               for h in e.get('hooks',[]))]
+    if not hooks[event]:
+        del hooks[event]
+data['hooks'] = hooks
+with open('${CX_HOOKS_FILE}', 'w') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+print('  [OK] Removed hooks from hooks.json')
+" 2>/dev/null
+    fi
+
+    # Remove session-recorder block from AGENTS.md
+    if [[ -f "${CX_AGENTS_FILE}" ]]; then
+        python3 -c "
+import re
+with open('${CX_AGENTS_FILE}') as f:
+    content = f.read()
+content = re.sub(r'\n?<!-- session-recorder:start -->.*?<!-- session-recorder:end -->\n?', '', content, flags=re.DOTALL)
+with open('${CX_AGENTS_FILE}', 'w') as f:
+    f.write(content.strip() + '\n' if content.strip() else '')
+print('  [OK] Removed session-recorder from AGENTS.md')
+" 2>/dev/null
+    fi
+
+    # Remove preferences
+    if [[ -f "${CX_PREFS_FILE}" ]]; then
+        if confirm "  Remove Codex preferences?"; then
+            rm -f "${CX_PREFS_FILE}"
+            success "Preferences removed."
+        fi
+    fi
+
+    success "Codex CLI cleanup done."
+}
+
+# ============================================================================
+#  Clean session data
+# ============================================================================
+
 clean_session_data() {
     info "Cleaning up session data..."
-
-    # Clean /tmp session directories
     local tmp_dirs=(/tmp/.session-recorder-* /tmp/.session-recorder)
     for dir in "${tmp_dirs[@]}"; do
         if [[ -d "$dir" ]]; then
@@ -193,12 +207,13 @@ clean_session_data() {
             fi
         fi
     done
-
-    info "Note: .session-recorder/ directories in project folders are NOT removed."
-    info "Remove them manually if needed: find / -name .session-recorder -type d 2>/dev/null"
+    info "Note: .session-recorder/ in project folders are NOT removed."
 }
 
-# ── Main ────────────────────────────────────────────────────────────────────
+# ============================================================================
+#  Main
+# ============================================================================
+
 main() {
     echo ""
     echo -e "${BOLD}╔══════════════════════════════════════════════╗${NC}"
@@ -206,8 +221,21 @@ main() {
     echo -e "${BOLD}╚══════════════════════════════════════════════╝${NC}"
     echo ""
 
+    local has_cc=false
+    local has_cx=false
+    [[ -d "${CC_PLUGIN_DIR}" || -f "${CC_SETTINGS_FILE}" ]] && has_cc=true
+    [[ -d "${CX_PLUGIN_DIR}" || -f "${CX_HOOKS_FILE}" ]] && has_cx=true
+
+    if ! $has_cc && ! $has_cx; then
+        info "No session-recorder installation found."
+        exit 0
+    fi
+
     if ! $FORCE; then
-        echo -e "${YELLOW}This will remove session-recorder from Claude Code.${NC}"
+        local platforms=""
+        $has_cc && platforms="Claude Code"
+        $has_cx && { [[ -n "$platforms" ]] && platforms="${platforms} & "; platforms="${platforms}Codex CLI"; }
+        echo -e "${YELLOW}This will remove session-recorder from ${platforms}.${NC}"
         echo ""
         if ! confirm "Proceed with uninstall?"; then
             info "Uninstall cancelled."
@@ -216,29 +244,18 @@ main() {
         echo ""
     fi
 
-    # Step 1: Remove plugin files
-    remove_plugin_files
+    $has_cc && uninstall_claude_code && echo ""
+    $has_cx && uninstall_codex && echo ""
 
-    # Step 2: Deregister plugin
-    deregister_plugin
-
-    # Step 3: Remove preferences (optional)
-    echo ""
-    remove_preferences
-
-    # Step 4: Clean up runtime session data (optional)
     if $CLEAN_ALL; then
-        echo ""
         clean_session_data
+        echo ""
     fi
 
-    # Done
-    echo ""
     echo -e "${BOLD}=== Uninstall Complete ===${NC}"
     echo ""
     success "session-recorder has been removed."
-    info "Restart Claude Code for changes to take effect."
-    info "Session logs in .session-recorder/ directories are NOT removed (your data)."
+    info "Restart your AI coding tool for changes to take effect."
     echo ""
 }
 

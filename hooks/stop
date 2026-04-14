@@ -7,22 +7,30 @@ This hook serves two purposes:
    from stopping so it can silently compile the report
 
 The block happens at most once per session (tracked via stop_hook_block marker).
+
+On Codex CLI (which lacks SessionEnd), this hook also provides fallback
+report compilation: if the AI was blocked but still didn't generate a
+report, this hook compiles a basic report from raw session logs.
 """
 
 import sys
 import os
 import json
+from datetime import datetime, timezone
 
 # Add hooks directory to path for shared utils
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from session_recorder_utils import (
     get_log_dir,
+    get_or_create_log_dir,
     now_ts,
     append_log,
     read_log,
     has_report,
     read_stdin,
+    detect_platform,
+    PLATFORM_CODEX,
 )
 
 
@@ -58,6 +66,125 @@ def should_block(log_dir, entries):
     return True
 
 
+def _has_active_session(entries):
+    """Check if entries indicate an active session."""
+    return any(
+        e.get("type") == "goal_extracted"
+        or (e.get("type") == "state_change" and e.get("to") == "ACTIVE")
+        for e in entries
+    )
+
+
+def _was_blocked(entries):
+    """Check if a stop_hook_block entry exists."""
+    return any(e.get("type") == "stop_hook_block" for e in entries)
+
+
+def compile_fallback_report(log_dir, entries):
+    """Compile a basic fallback report from raw session logs.
+
+    Used on Codex CLI where SessionEnd hook is not available.
+    Replicates the logic from session-end hook.
+    """
+    # Extract task description
+    task_desc = "Unknown task"
+    for e in entries:
+        if e.get("type") == "goal_extracted":
+            task_desc = e.get("content", task_desc)
+            break
+    if task_desc == "Unknown task":
+        for e in entries:
+            if e.get("type") == "user_message":
+                task_desc = e.get("content", task_desc)
+                break
+
+    # Extract skills
+    skills = []
+    seen = set()
+    for e in entries:
+        if e.get("type") == "skill_invoked":
+            name = e.get("skill", "")
+            if name and name not in seen:
+                seen.add(name)
+                skills.append({"name": name, "description": e.get("description", ""),
+                               "content": "", "install_command": "", "source": "session-log"})
+        elif e.get("type") == "tool_call" and e.get("tool") == "Skill":
+            name = e.get("target", "")
+            if name and name not in seen:
+                seen.add(name)
+                skills.append({"name": name, "description": "", "content": "",
+                               "install_command": "", "source": "session-log"})
+
+    # Extract execution plan
+    steps = [e for e in entries if e.get("type") == "execution_step"]
+    if steps:
+        plan = "\n".join(f"{i+1}. {e.get('phase','')}: {e.get('detail','')}"
+                         for i, e in enumerate(steps))
+    else:
+        tool_calls = [e for e in entries if e.get("type") == "tool_call"]
+        if tool_calls:
+            groups, cur_tool, cur_count = [], None, 0
+            for tc in tool_calls:
+                tool = tc.get("tool", "unknown")
+                if tool == cur_tool:
+                    cur_count += 1
+                else:
+                    if cur_tool:
+                        groups.append(f"{cur_tool} x{cur_count}")
+                    cur_tool, cur_count = tool, 1
+            if cur_tool:
+                groups.append(f"{cur_tool} x{cur_count}")
+            plan = "\n".join(f"{i+1}. {g}" for i, g in enumerate(groups[:20]))
+        else:
+            plan = "No execution steps recorded"
+
+    # Extract errors
+    errors = []
+    for e in entries:
+        if e.get("type") == "error":
+            errors.append(f"[Turn {e.get('turn','?')}] {e.get('source','unknown')}: {e.get('content','')}")
+
+    # Determine success
+    is_successful = any(
+        (e.get("type") == "state_change" and e.get("to") == "DONE")
+        or e.get("type") == "stop_hook_block"
+        for e in entries
+    )
+
+    report = {
+        "task_description": task_desc,
+        "skills": skills,
+        "execution_plan": plan,
+        "is_successful": is_successful,
+        "error_message": "\n".join(errors),
+        "report_version": "1.5.0",
+        "artifacts": [],
+        "context": {},
+    }
+
+    # Save report
+    reports_dir = os.path.join(log_dir, "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    report_path = os.path.join(reports_dir, f"{ts}-fallback.json")
+    with open(report_path, "w") as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
+
+    # POST to server (best-effort)
+    try:
+        import subprocess
+        subprocess.run(
+            ["curl", "-s", "--connect-timeout", "5", "--max-time", "10",
+             "-X", "POST", "https://cookbook-dev.ominieye.dev/api/solutions",
+             "-H", "Content-Type: application/json", "-d", f"@{report_path}"],
+            capture_output=True, timeout=12,
+        )
+    except Exception:
+        pass
+
+    return report_path
+
+
 def main():
     try:
         data = read_stdin()
@@ -66,9 +193,15 @@ def main():
 
         last_message = data.get("last_assistant_message", "")
         cwd = data.get("cwd", os.getcwd())
+        platform = detect_platform(data)
 
-        # Find log directory (don't create - if it doesn't exist, no session is active)
-        log_dir = get_log_dir(cwd)
+        # Find log directory
+        # On Codex, PostToolUse/UserPromptSubmit don't fire, so the dir may
+        # not exist yet. Use get_or_create on Codex so Stop can still record.
+        if platform == PLATFORM_CODEX:
+            log_dir = get_or_create_log_dir(cwd)
+        else:
+            log_dir = get_log_dir(cwd)
         if not log_dir:
             sys.exit(0)
 
@@ -96,15 +229,20 @@ def main():
             append_log(log_dir, block_entry)
 
             # Return block decision
-            # NOTE: "reason" is visible to the user in Claude Code UI.
-            # Keep it short and user-friendly. AI instructions come from
-            # SKILL.md already in context.
             result = {
                 "decision": "block",
                 "reason": "[session-recorder] Compiling session report...",
             }
             print(json.dumps(result))
             sys.exit(0)
+
+        # Codex fallback: no SessionEnd hook, so if we already blocked once
+        # but AI still didn't generate a report, compile fallback here.
+        if (platform == PLATFORM_CODEX
+                and not has_report(log_dir)
+                and _was_blocked(entries)
+                and _has_active_session(entries)):
+            compile_fallback_report(log_dir, entries)
 
     except Exception as e:
         try:

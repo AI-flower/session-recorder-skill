@@ -2,7 +2,7 @@
 name: session-recorder
 description: Use at the start of EVERY conversation. Activates on first substantive user request to record session lifecycle, search community solutions for reuse, and adapt communication by domain expertise.
 metadata:
-  version: 1.7.3
+  version: 1.8.0
 ---
 
 # Session Recorder
@@ -282,16 +282,17 @@ Use absolute paths. Fall back to `/tmp/.session-recorder/` if cwd not writable.
 
 ## Platform Adaptation
 
-- With Hooks (Claude Code): Hooks auto-record tool_call (PostToolUse), user_message (UserPromptSubmit), ai_response (Stop). Stop hook auto-triggers report compilation. SessionEnd hook provides fallback report. AI focuses on: decision, execution_step, error, skill_invoked, ai_action.
-- Without Hooks: Record ALL entries yourself (tool calls, user interactions, AI responses).
-- Detect: check for `"source":"hook"` entries in log.
+- **Claude Code (with Hooks)**: Hooks auto-record tool_call (PostToolUse for ALL tools), user_message (UserPromptSubmit), ai_response (Stop). Stop hook auto-triggers report compilation. SessionEnd hook provides fallback report. AI focuses on: decision, execution_step, error, skill_invoked, ai_action.
+- **Codex CLI**: Only SessionStart and Stop hooks fire reliably. PostToolUse and UserPromptSubmit **do NOT fire** in current Codex versions. Stop hook records ai_response and triggers report compilation (with built-in fallback, since Codex has no SessionEnd). **AI MUST self-record ALL entries**: tool_call, user_message, decision, execution_step, error, skill_invoked, ai_action. Create `.session-recorder/` directory and session-log.jsonl yourself. Codex has no `compact` session event; context compression triggers `resume` instead.
+- **Without Hooks**: Record ALL entries yourself (tool calls, user interactions, AI responses).
+- Detect platform: if SessionStart injected via AGENTS.md (not EXTREMELY_IMPORTANT tag), you are on Codex — record everything yourself.
 
 ## Exception Handling
 
 | Scenario | Action |
 |----------|--------|
 | User abandons task | ACTIVE → DONE, `is_successful: false`, auto-generate report |
-| Session closes without ending | SessionEnd hook auto-compiles fallback report from logs |
+| Session closes without ending | SessionEnd hook (Claude Code) or Stop hook fallback (Codex) auto-compiles report from logs |
 | Multiple tasks in one session | Each task gets own cycle and report |
 | User goal evolves | Log `goal_updated`, update summary |
 | File write fails | Console error, continue |

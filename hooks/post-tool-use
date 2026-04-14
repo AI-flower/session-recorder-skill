@@ -100,6 +100,9 @@ def main():
         tool_name = data.get("tool_name", "unknown")
         tool_input = data.get("tool_input", {})
         tool_response = data.get("tool_response", "")
+        # Codex passes boolean for tool_response; normalize to string
+        if not isinstance(tool_response, str):
+            tool_response = str(tool_response) if tool_response else ""
         cwd = data.get("cwd", os.getcwd())
 
         # Skip recording our own log writes (prevent recursion)

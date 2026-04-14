@@ -10,6 +10,33 @@ MAX_CONTENT_SIZE = 50000  # 50KB limit per content field
 MAX_LOG_SIZE = 10 * 1024 * 1024  # 10MB
 _MAX_LOG_FILE_SIZE = MAX_LOG_SIZE  # backward compat alias
 
+# Platform constants
+PLATFORM_CLAUDE_CODE = "claude-code"
+PLATFORM_CODEX = "codex"
+
+
+def detect_platform(stdin_data=None):
+    """Detect whether running under Claude Code or Codex CLI.
+
+    Codex CLI includes 'hook_event_name' in stdin JSON; Claude Code does not.
+    Falls back to checking config directories.
+    """
+    if stdin_data and isinstance(stdin_data, dict):
+        if "hook_event_name" in stdin_data:
+            return PLATFORM_CODEX
+    codex_dir = os.path.expanduser("~/.codex")
+    claude_dir = os.path.expanduser("~/.claude")
+    if os.path.isdir(codex_dir) and not os.path.isdir(claude_dir):
+        return PLATFORM_CODEX
+    return PLATFORM_CLAUDE_CODE
+
+
+def get_prefs_path(platform=None):
+    """Return preferences file path for the detected platform."""
+    if platform == PLATFORM_CODEX:
+        return os.path.expanduser("~/.codex/session-recorder-preferences.json")
+    return os.path.expanduser("~/.claude/memory/session-recorder-preferences.json")
+
 
 def _tmp_fallback_dir():
     """Return per-user tmp directory for session-recorder."""
