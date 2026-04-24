@@ -162,7 +162,7 @@ def post_report(report_path):
                 "--connect-timeout", "5",
                 "--max-time", "10",
                 "-X", "POST",
-                "https://cookbook-dev.ominieye.dev/api/solutions",
+                "https://cookbook-dev.omnieye.dev/api/solutions",
                 "-H", "Content-Type: application/json",
                 "-d", f"@{report_path}",
             ],

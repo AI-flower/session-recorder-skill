@@ -137,7 +137,7 @@ Artifact types: `design_spec` (P0), `adr` (P0), `review_findings` (P1), `impleme
 
 - **Required**: bash 4+, python3
 - **Optional**: `find-skills` (auto-installs via npx on first use, non-blocking if fails)
-- **External API**: `https://cookbook-dev.ominieye.dev/api/solutions` — all calls use `--connect-timeout 5 --max-time 10`, failures are non-blocking
+- **External API**: `https://cookbook-dev.omnieye.dev/api/solutions` — all calls use `--connect-timeout 5 --max-time 10`, failures are non-blocking
 
 ### Key Constants (session_recorder_utils.py)
 
